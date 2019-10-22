@@ -1,0 +1,587 @@
+Request For Comments: 999999                                Clarkson University
+Category: Working Draft                                          September 2019
+
+    Scrabble Protocol Version 1
+
+Abstract
+
+    The Scrabble Protocol is a networked version of the game "Scrabble" by
+    Hasbro.  
+
+    This protocol uses TCP as the underlying transport layer. The
+    protocol will communicate between the client, which is the interface
+    to the player and a server which manages the game.
+
+Table of Contents
+
+    1 Introduction
+
+    2 Grammar
+
+    3 Messages, Requests, and Responses
+    3.1 HELLO
+    3.2 QUIT
+    3.3 OK
+    3.4 NOK
+    3.5 USERSET
+    3.6 USERCHANGE
+    3.7 USERJOIN
+    3.8 READY
+    3.9 SCORE
+    3.10 BOARDPUSH
+    3.11 TILES
+    3.12 TURN
+    3.13 PLACE
+    3.14 PASS
+    3.15 EXCHANGE
+    3.16 WINNER
+
+    4 Protocol Overview and Examples
+    4.1 Example Conversation
+    4.2 Tile Distribution
+
+    5 ACK
+
+1   Introduction
+
+    This document proposes a TCP-based protocol for the game "Scrabble"
+    by Hasbro called the Scrabble Protocol. The Scrabble Protocol is an
+    application-layer protocol defining how the Scrabble server and
+    client can communicate with each other and transfer messages to
+    facilitate the game. 
+
+2   Grammar
+
+    Where possible, this document will use the Extended Backus-Naur form
+    (EBNF), also used in other RFCs, to precisely describe the protocol:
+
+    - As TCP delivers reliable streams of bytes in order, the grammar
+      defined here will range over 8-bit bytes (octets), which may also be
+      reference as 7-bit ASCII codepoints where convenient. An octet in
+      a production is specified as a decimal number (such as 42, 127,
+      etc.) not less than 0 and not greater than 255. An ASCII codepoint
+      in a production is surrounded by single quotes (such as 'a', which
+      is equivalent to 97).
+
+    - A double-quoted sequence of characters is a sequence of ASCII
+      codepoints that must match exactly. For example, "hello " is the
+      same as 'h' 'e' 'l' 'l' 'o' ' '.
+
+    - A dash (-) indicates a range of byte values, inclusive. For
+      example. 'a' - 'd' is equivalent to 97 - 100 (ASCII values), and
+      both are equivalent to 97 | 98 | 99 | 100 (see pipe (|) below).
+
+    - A star (*) indicates a production that may be repeated zero or
+      more times. For example, 'a' 'b'* matches "a", "ab", "abb",
+      "abbb", and so on.
+
+    - A question mark (?) indicates a production that is optional, and
+      may be omitted. For example, 'a' 'b'? 'c' matches either "ac" or
+      "abc".
+
+    - A pipe (|) between two productions indicates either may match.
+      Pipes have the lowest precedence, so 'a' | 'e' - 'g' | 'q'* would
+      match any of 'a', 'e', 'f', or 'g', or any number of 'q' (including
+      zero).
+
+    - New nonterminals are declared in angle brackets (<>), separated
+      from sequences they may match by "::=". Wherever a nonterminal is
+      encountered, it may be replaced by the right hand side.
+
+    Where appropriate, some parenthetical explanations are also included.
+    White space in productions is unimportant.
+
+    As a basis for the rest of this document, the following definitions
+    are provided:
+
+        <CR>        ::=     13 (ASCII carriage return)
+
+        <LF>        ::=     10 (ASCII newline/line feed)
+
+        <CRLF>      ::=     <CR> <LF>
+
+        <SP>        ::=     ' ' (ASCII code 32)
+
+        <digit>     ::=     '0' - '9' (any ASCII decimal digit)
+
+        <number>    ::=     <digit> <digit>* (at least one digit)
+            (the value of the number is parse as an arbitrary-precision
+             integer)
+
+        <letter>    ::=     'a' - 'z' | 'A' - 'Z'
+
+        <alphanum>  ::=     <letter> | <digit>
+
+        <name>      ::=     <letter> <alphanum>*
+
+        <any>       ::=     0 - 255
+            (Note: several productions are written as containing
+             "<any>*". These productions are to be understood as ending
+             at the soonest match of any following production. For
+             example, "<any>* <CRLF>" is to specify any sequence of
+             bytes, ending with a carriage return and line feed.)
+
+        <nocrlf>    ::=     0 - 9 | 11 - 12 | 14 - 255 
+            (any byte except <CR> or <LF>)
+
+    As a compatibility option, an implementor of this specification MAY
+    match <LF> whereever <CRLF> is specified in this grammer.
+    Regardless, all implimentations SHOULD sned <CRLF> wherever a <CRLF>
+    is stated.
+
+3   Messages, Requests, and Responses
+
+    This section defines the messages that will be sent between the
+    server and the client to facilitate the game of Scrabble. For
+    examples of their usage see Section 4.1.
+
+3.1 HELLO
+
+    This is sent by both the client and the server. The server MUST send
+    this immediately after a connection is established, and the client
+    MUST reply with this command before any other command is sent on the
+    connection. A server SHOULD terminate a connection which violates
+    this protocol with GOODBYE, below.
+
+        <version>   ::=     <number> '.' <number> '.'? <number>?
+
+        <system>    ::=     <any> <any>*
+            This describes the platform upon which the client or server is running.
+            This specification imposes no format on this field, but it SHOULD include
+            information about the current operating system, such as its name (e.g.
+            "Windows", "Mac OS", "Linux", etc.) and a relevant version (e.g. "10" or
+            "XP", "10.14.6", "5.1", etc.).
+        
+        <program>   ::=     <any> <any>*
+            This describes the implementation of the current server or
+            client. Specifically, it MUST take the form of the language in
+            use (e.g. "C", "C++", "Java", "Python", "Go", "Rust", etc.),
+            followed by a slash ('/'), followed by any version information in
+            any format relevant to that language's compiler or runtime (e.g.
+            "C++/G++ 6.2", "Python/3.6.4", etc.).
+
+        <author>    ::=     <any> <any>*
+            The author field contains a free-format value which SHOULD specify
+            the individual who created this implementation of the server
+            and client.
+
+        <hellowcmd> ::=     "HELLO " <version> ',' <system> ',' <program> ',' <author> <CRLF>
+
+    Implementations compliant to this specification should report a
+    version of "1.0.0". A 1.0.0-compliant server MUST acknowledge the
+    version of a 1.0.0 client. For example:
+
+        S: HELLO 1.0.0,Mac OS 10.14.6,C++,Hunter Bashaw
+        C: HELLO 1.0.0,Linux 5.1,Golang,Hunter Bashaw
+
+3.2 QUIT
+
+    This is sent by the client on an open connection. A server receiving
+    this MUST reply with GOODBYE, and close the connection, but also
+    SHOULD be prepared to receive and error when sending GOODBYE if the
+    client has already closed the connection.
+
+        <quitcmd>   ::=     "QUIT" <CRLF>
+
+    For Example:
+
+        C: QUIT
+        S: GOODBYE
+
+    After this conversation, both client and server close their
+    connections.
+
+3.3 OK
+
+    This is sent by the server to generally acknowledge a command.
+    Optionally, it may be followed by a human-readable explanation of
+    the current state of the protocol. If this is given, it MUST be
+    separated from OK by a single space (ASCII code 32).
+
+        <descr>     ::=     ' ' <any>*
+
+        <okresp>    ::=     "OK" <descr>? <CRLF>
+
+    The <descr> describes the state of the protocol in an informal way;
+    for example:
+
+        S: HELLO 1.0.0,Debian 9 GNU/Linux,C,Hunter
+        C: HELLO 1.0.0,Mac OS 10.13,Swift,Hunter
+        S: OK Scrabble server at your service!
+
+3.4 NOK
+
+    This is sent by the server to negatively acknowledge a command. Upon
+    receipt, the client MUST consider the previous command to have
+    failed, and any state change that may have occurred to be void.
+    Optionally, it may be followed with a human readable explanation of
+    the error.
+
+        <nokresp>   ::=     "NOK" <descr>? <CRLF>
+
+    The <descr>, as with OK, gives a human-readable description of the
+    current state of the protocol, including possibly the cause of
+    failure:
+
+        S: HELLO 1.0.0,Windows 10 October Update,C#,Hunter 
+        C: HELLO 1.4.7,Temple OS,Holy-C,Hunter
+        S: NOK Unsupported version!
+        C: QUIT
+        S: GOODBYE
+
+    This is a valid response to an invalid or unrecognized command:
+
+        S: HELLO 1.0.0,OpenBSD,C,Hunter
+        C: HELLO 1.0.0,Ubuntu 16.04,Java,Jeanna
+        S: OK at your service
+        C: FOOBAR
+        S: NOK unrecognized command
+
+3.5 USERSET
+
+    This is sent by the client to set the username for that particular
+    client for the duration of the game. This can be reset at any time
+    by sending the USERSET command again.
+
+        <userset>  ::=     "USERSET " <any> <any>* <CRLF>
+
+    The server will either respond USERCHANGE if the name change was successful
+    or NOK if there was an error. The default username SHOULD be the IP
+    address of the client. The server MUST use this username to refer to
+    that particular client in all following interactions.
+
+    If a client attempts to set their name to a name that already exists
+    on the server, then the server should respond with a NOK. For
+    example:
+
+        S: USERJOIN 192.168.1.14
+        S: USERCHANGE 192.168.1.14 Graham
+        C: USERSET Graham
+        S: NOK name already taken :P
+
+3.6 USERCHANGE
+
+    This is send by the server to all clients when a client uses the
+    USERSET command to change their name. This is to notify all clients
+    of the new username for display purposes.
+
+        <userchange>    ::=     "USERCHANGE " <oldusername> <any> <any>* <CRLF>
+            Where <oldusername> is the previously used or default
+            username of that particular client.
+
+3.7 USERJOIN
+
+    This is sent by the server to all clients when a client connects to
+    the server. This will only be sent before the game begins as users
+    are not allowed to join a game once it has begun.
+
+        <userjoin>  ::=     "USERJOIN " <any> <any>* <CRLF>
+
+    If a client joins the server after several have already joined the
+    server, but before the game begins, the server MUST send USERJOIN
+    messages to that client to update them on all the clients connected.
+    For example:
+
+        S: HELLO 1.0.0,Ubuntu Server,C++,Hunter
+        C: HELLO 1.0.0,Mac OS 10.14.6,Objective-C,Hunter
+        S: OK Please send username :)
+        S: USERJOIN Jeanna
+        S: USERJOIN Marzieh
+        ...
+
+    NOTE: Jeanna and Marzieh had set their username long before this
+    client joined the server, however it sends them their USERJOIN
+    messages with their most recently set username anyway. Because of
+    this, every client that joins the server should, from it's
+    perspective, look like it's the first to join.
+
+3.8 READY
+
+    This is sent by the client to the server when the client wishes to
+    begin the game. Once all clients have sent the READY command the
+    game will begin. NOTE: if there is only one client the game will
+    begin immediately after the client sends the ready command.
+
+        <ready>     ::=     "READY" <CRLF>
+
+3.8 STARTING
+
+   This is sent by the server to all clients to announce that all
+   players are ready and the game is beginning. 
+
+        <starting>  ::=     "STARTING" <CRLF>
+
+3.9 SCORE
+
+    This MUST be sent by the server to update all clients of any changes
+    to a players score after every turn. This command SHOULD be sent to
+    all clients upon the beginning of the game, with an initial score of
+    0. The score sent MUST be the players total score, NOT the number of
+    points earned that turn. The server SHOULD validate the words with
+    the GNU Collaborative International Dictionary of English (This is
+    available freely online, as well, on Unix systems you can use the
+    dictionary in /usr/share/dict/words).
+
+        <score>     ::=     "SCORE " <number> <any> <any>*
+
+    For example:
+
+        S: STARTING
+        S: SCORE 0 Hunter
+        S: BOARDPUSH
+            <board-data>
+        S: TILES <tile-data>
+        S: TURN Jeanna
+        S: SCORE 10 Jeanna
+        ...
+
+    NOTE: In this example, we were updated with Jeanna's score after the
+    end of her turn even though we are not Jeanna, this allows for all
+    clients to keep track of everyone's score for display purposes.
+
+3.10 BOARDPUSH
+
+    This MUST be sent by the server after every turn to all clients to
+    update them as to the state of the board. 
+
+        <board-tile>    ::=     '(' <letter> | 0 ',' 0 - 4 ')'
+            NOTE: The first field represents a symbol that has been
+            placed, or the number 0 representing that the space is
+            available.
+            NOTE: The second field represents the modifier where 0 is no
+            modifier, 1 is a double letter score, 2 is a triple letter
+            score, 3 is a double word score, and 4 is a triple word score.
+
+        <board-data>    ::=     <board-tile> <board-tile> <board-tile> <board-tile> <board-tile> <board-tile> <board-tile> <board-tile> <board-tile> <board-tile> <board-tile> <board-tile> <board-tile> <board-tile> <board-tile> <CRLF>
+                                <board-tile> <board-tile> <board-tile> <board-tile> <board-tile> <board-tile> <board-tile> <board-tile> <board-tile> <board-tile> <board-tile> <board-tile> <board-tile> <board-tile> <board-tile> <CRLF> 
+                                <board-tile> <board-tile> <board-tile> <board-tile> <board-tile> <board-tile> <board-tile> <board-tile> <board-tile> <board-tile> <board-tile> <board-tile> <board-tile> <board-tile> <board-tile> <CRLF> 
+                                <board-tile> <board-tile> <board-tile> <board-tile> <board-tile> <board-tile> <board-tile> <board-tile> <board-tile> <board-tile> <board-tile> <board-tile> <board-tile> <board-tile> <board-tile> <CRLF> 
+                                <board-tile> <board-tile> <board-tile> <board-tile> <board-tile> <board-tile> <board-tile> <board-tile> <board-tile> <board-tile> <board-tile> <board-tile> <board-tile> <board-tile> <board-tile> <CRLF> 
+                                <board-tile> <board-tile> <board-tile> <board-tile> <board-tile> <board-tile> <board-tile> <board-tile> <board-tile> <board-tile> <board-tile> <board-tile> <board-tile> <board-tile> <board-tile> <CRLF>
+                                <board-tile> <board-tile> <board-tile> <board-tile> <board-tile> <board-tile> <board-tile> <board-tile> <board-tile> <board-tile> <board-tile> <board-tile> <board-tile> <board-tile> <board-tile> <CRLF> 
+                                <board-tile> <board-tile> <board-tile> <board-tile> <board-tile> <board-tile> <board-tile> <board-tile> <board-tile> <board-tile> <board-tile> <board-tile> <board-tile> <board-tile> <board-tile> <CRLF> 
+                                <board-tile> <board-tile> <board-tile> <board-tile> <board-tile> <board-tile> <board-tile> <board-tile> <board-tile> <board-tile> <board-tile> <board-tile> <board-tile> <board-tile> <board-tile> <CRLF> 
+                                <board-tile> <board-tile> <board-tile> <board-tile> <board-tile> <board-tile> <board-tile> <board-tile> <board-tile> <board-tile> <board-tile> <board-tile> <board-tile> <board-tile> <board-tile> <CRLF>  
+                                <board-tile> <board-tile> <board-tile> <board-tile> <board-tile> <board-tile> <board-tile> <board-tile> <board-tile> <board-tile> <board-tile> <board-tile> <board-tile> <board-tile> <board-tile> <CRLF>
+                                <board-tile> <board-tile> <board-tile> <board-tile> <board-tile> <board-tile> <board-tile> <board-tile> <board-tile> <board-tile> <board-tile> <board-tile> <board-tile> <board-tile> <board-tile> <CRLF> 
+                                <board-tile> <board-tile> <board-tile> <board-tile> <board-tile> <board-tile> <board-tile> <board-tile> <board-tile> <board-tile> <board-tile> <board-tile> <board-tile> <board-tile> <board-tile> <CRLF> 
+                                <board-tile> <board-tile> <board-tile> <board-tile> <board-tile> <board-tile> <board-tile> <board-tile> <board-tile> <board-tile> <board-tile> <board-tile> <board-tile> <board-tile> <board-tile> <CRLF> 
+                                <board-tile> <board-tile> <board-tile> <board-tile> <board-tile> <board-tile> <board-tile> <board-tile> <board-tile> <board-tile> <board-tile> <board-tile> <board-tile> <board-tile> <board-tile> <CRLF>  
+
+            NOTE: This is a 15 x 15 board.
+
+        <boardpush>     ::=     "BOARDPUSH" <CRLF> <board-data> <CRLF>
+
+3.11 TILES
+
+    This command is sent by the server to inform a particular client
+    of there current set of tiles at the end of that clients turn. This
+    should also be sent to all clients at the start of the game to
+    inform them of their tile set.
+
+        <tile>          ::=     A - Z 
+
+        <tiles>         ::=     "TILES " <tile> <tile> <tile> <tile> <tile> <tile> <tile> <CRLF>
+            NOTE: It is possible for players to have less than 7 tiles
+            in their hand towards the end of the game, in such a case
+            only the remaining tiles will be sent back. For this
+            reason any client implementing this protocol should search
+            for the <CRLF> to end the transaction, not 7 tiles
+            followed by <CRLF>.
+
+3.12 TURN
+
+    This commands is sent by the server to all clients to inform them of
+    the player who is currently taking a turn. If it is not a clients
+    turn and they try to interact with the server anyway then the server
+    will respond with a NOK. If it is the clients turn then they can use
+    the normally available commands to take their turn.
+
+        <turn>      ::=     "TURN " <username> <CRLF>
+            (Where <username> is the player who's turn it is)
+
+3.13 PLACE
+
+    This command is sent by a client to the server when it is there turn
+    to place tiles on the board.
+
+        <place>     ::=    ( '(' <letter> ',' <number> ',' <number> ')' )* <CRLF>
+            NOTE: The first field is the tile that the client wishes
+            to place (If this tile is not in the players current set
+            then the server will respond with a NOK). The second field
+            is a number that represents the place on the x-axis of the
+            grid, starting at 0 and going to 14. The third field is the
+            number that represents the place on the y-axis of the grid,
+            starting at 0 and going to 14.
+
+    A player can place up to as many tiles as they have in their hand on
+    the board. The server must verify that the word branches from an
+    existing word on the board (Except in the case of the first word
+    that is placed, then it must go through the center tile), and update
+    the player on their total score accordingly.
+
+3.14 PASS
+
+    This command can be sent by a client on their turn to pass. This
+    results in them ending their turn while taking no action. If any
+    player does this two times in a row then the server must decide the
+    winner by who has the highest score and end the game.
+
+        <pass>      ::=     "PASS" <CRLF>
+
+3.15 EXCHANGE
+
+    This command can be sent by a client on their turn to exchange 1 or
+    all of their tiles instead of taking their turn. The server is
+    responsible for getting new tiles and sending them to the player
+    at the beginning of their next turn with the TILES command. No
+    points are awarded for an exchanged, however the server must send
+    the total number of points that player has at the end of the turn
+    regardless.
+
+        <tile>    ::=     A - Z
+
+        <exchange>  ::=     "EXCHANGE " <tile> <CRLF> | "EXCHANGE" <CRLF>
+            (Where <tile> is the tile that the player wishes to
+             exchange. If the client only asks to exchange then all of
+             the tiles will be exchanged.)
+
+    For Example:
+
+        S: TURN Hunter
+        C: EXCHANGE A
+        S: OK tiles exchanged
+        S: TILES <tile-data>
+        S: SCORE 10 Hunter
+        S: TURN Marzieh
+        ...
+
+3.16 WINNER
+
+    When the game ends the server MUST send out the WINNER command to
+    announce the winner of the game and their score.
+
+        <winner>    ::=     "WINNER " <number> <username>
+
+    After this command is sent the clients SHOULD send the QUIT command
+    and close the connection.   
+
+4 Protocol Overview and Examples
+
+    To begin the game, a server must be running and listening on a port
+    9000 by default, but as a command line argument the port MUST be
+    configurable. As well, the client MUST be able to take in as a
+    command line argument the IP address and port number of the server.
+    Any clients wishing to connect may do so after the server has
+    started, but before the game has started. Once the game has started
+    (all clients have sent the READY command) no more clients will be
+    able to enter the game and the game will play until completion. If a
+    client should quit the game early the client with the highest score
+    at that moment will be chosen as winner. Should there be no clients
+    left to choose a winner out of in the event of an early QUIT, the
+    server should exit the game.
+
+    This game is played with 100 tiles "in the bag". Normally this mean
+    that there are 98 letter tiles with varying point values and 2
+    wilds, however you will notice that this protocol lacks any way to
+    handle wild tile. For this assignment there should be 100 tiles,
+    with the 98 normal (listed in 4.2) and 2 that are randomly selected
+    each game to fill the spot of the "wilds".
+
+4.1 Example Conversation
+
+    This is an example of a session between a singular client and
+    server. In this you can see that two other clients connect to the
+    server.
+
+        S: HELLO 1.0.0,Linux Ubuntu 18.10,Golang,Hunter Bashaw
+        C: HELLO 1.0.0,Mac OS 10.14.6,Python,Hunter Bashaw
+        S: OK Please send a username, otherwise you will be known as <client-ip>
+        C: USERSET Hunter
+        S: USERCHANGE 127.0.0.1 Hunter
+        S: USERJOIN 192.168.1.45
+        S: USERCHANGE 192.168.1.45 Jeanna
+        S: USERJOIN 192.168.1.46
+        S: USERCHANGE 192.168.1.46 Marzieh
+        C: READY
+        S: OK when everyone is ready the game will start
+        S: STARTING
+        S: SCORE 0 Hunter
+        S: BOARDPUSH 
+            <board-data>
+        S: TILES <tile-data>
+        S: TURN Jeanna
+        C: PLACE (A,1,5)
+        S: NOK connot place tiles when it's not your turn
+        S: SCORE 10 Jeanna
+        S: BOARDPUSH
+            <board-data>
+        S: TURN Hunter
+        C: PLACE (H,5,7) (E,6,7) (L,8,7) (O,9,7)
+        S: OK Turn Successful
+        S: TILES <tile-data>
+        S: SCORE 7 Hunter
+        S: BOARDPUSH
+            <board-data>
+
+        ...
+        ...
+        ...
+
+        S: WINNER 50 Marzieh
+        C: QUIT
+        S: GOODBYE
+
+
+4.2 Tile Distribution
+
+    As Stated above there are 100 tiles in the game, 98 are listed
+    below. The remaining 2 would normally be "wild" tiles, however for
+    this implimentation the server should randomly choose 2 letter to
+    add "to the bag".
+
+        A: 9 tiles
+        B: 2 tiles
+        C: 2 tiles
+        D: 4 tiles
+        E: 12 tiles
+        F: 2 tiles
+        G: 3 tiles
+        H: 2 tiles
+        I: 9 tiles
+        J: 1 tile
+        K: 1 tile
+        L: 4 tiles
+        M: 2 tiles
+        N: 6 tiles
+        O: 8 tiles
+        P: 2 tiles
+        Q: 1 tile
+        R: 6 tiles
+        S: 4 tiles
+        T: 6 tiles
+        U: 4 tiles
+        V: 2 tiles
+        W: 2 tiles
+        X: 1 tile
+        Y: 2 tiles
+        Z: 1 tile
+
+    The point distributions are as follows:
+
+        1 Point: A,E,I,L,N,O,R,S,T and U
+        2 Points: D and G
+        3 Points: B,C,M and P
+        4 Points: F,H,V,W and Y
+        5 Points: K
+        8 Points: J and X
+        10 Points: Q and Z
+
+
+5 ACK
+
+    I'd like to thank Graham Northup for providing the Telephone
+    RFC for which this document is based, and Jeanna Matthews for
+    helping to design this draft as well as coming up with the original
+    idea.
+
