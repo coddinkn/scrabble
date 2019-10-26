@@ -1,6 +1,4 @@
 import Scrabble
-import Board
-import Player
 
 import Control.Monad.Except
 
@@ -10,7 +8,8 @@ scrabble :: ScrabbleIO ()
 scrabble = flip catchError handler $ do addPlayer "knc"
                                         playTiles "dmr" []
     where handler error = do liftIO $ putStrLn error
-                             playTiles "knc" [ Tile 'B' ]
+                             changeUsername "knc" "dmr"
+                             playTiles "dmr" [ Tile 'B' ]
 
 main :: IO ()
 main = playScrabbleIO scrabble

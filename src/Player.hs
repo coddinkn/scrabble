@@ -1,12 +1,6 @@
-module Player
-( Player (Player)
-, Players
-, Username
-, tiles
-, username
-) where
+module Player where
 
-import Board
+import Tile
 
 import Data.Maybe (isNothing, fromMaybe)
 
@@ -15,6 +9,9 @@ type Username = String
 data Player = Player { username  :: Username
                      , tiles     :: Tiles
                      , score     :: Int
-                     }
+                     } deriving Eq
 
 type Players = [Player]
+
+changePlayerUsername :: Username -> Player -> Player
+changePlayerUsername newUsername player = player { username = newUsername }

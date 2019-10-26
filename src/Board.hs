@@ -1,18 +1,13 @@
 module Board
 ( Board
-, Tile (Tile)
-, Tiles
 , Modifier
 , emptyBoard
 ) where
 
+import Tile
+
 import Data.Map
 import Data.Maybe
-
-newtype Tile = Tile Char
-    deriving (Eq, Ord, Show)
-
-type Tiles = [Tile]
 
 data BoardTile = BoardTile (Maybe Tile) (Maybe Modifier)
     deriving Eq
