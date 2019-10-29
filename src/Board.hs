@@ -6,11 +6,13 @@ module Board
 
 import Tile
 
-import Data.Map
+import Prelude hiding (lookup)
+import Data.Map hiding (map)
 import Data.Maybe
 
-data BoardTile = BoardTile (Maybe Tile) (Maybe Modifier)
-    deriving Eq
+data BoardTile = BoardTile { tile     :: Maybe Tile
+                           , modifier :: Maybe Modifier
+                           } deriving Eq
 
 instance Show BoardTile where
     show (BoardTile maybeTile maybeModifier) = maybe emptyTile show maybeTile
@@ -73,3 +75,19 @@ emptyBoard :: Board
 emptyBoard = Board . fromDistinctAscList $ makeBoardSpace <$> spaces
     where spaces = (,) <$> [0..14] <*> [0..14]
           makeBoardSpace space = (space, makeBoardTile space)
+
+getTile :: Board -> (Int, Int) -> Maybe Tile
+getTile (Board boardTileMap) space = lookup space boardTileMap >>= tile
+
+putTile :: Tile -> (Int, Int) -> Board -> Board
+putTile tile space (Board boardMap) = Board $ flip (insert space) boardMap $ BoardTile (Just tile) (spaceModifier space)
+
+vertical :: [(Int, Int)] -> Bool
+vertical spaces = and $ map (== y) ys
+    where ys = map snd spaces
+          y = head ys
+
+horizontal :: [(Int, Int)] -> Bool
+horizontal spaces = and $ map (== x) xs
+    where xs = map fst spaces
+          x = head xs
