@@ -2,6 +2,9 @@ module Board
 ( Board
 , Modifier
 , emptyBoard
+, putTile
+, getPossibleWord
+, Orientation (Vertical, Horizontal)
 ) where
 
 import Tile
@@ -82,12 +85,30 @@ getTile (Board boardTileMap) space = lookup space boardTileMap >>= tile
 putTile :: Tile -> (Int, Int) -> Board -> Board
 putTile tile space (Board boardMap) = Board $ flip (insert space) boardMap $ BoardTile (Just tile) (spaceModifier space)
 
-vertical :: [(Int, Int)] -> Bool
-vertical spaces = and $ map (== y) ys
-    where ys = map snd spaces
-          y = head ys
+data Orientation = Vertical
+                 | Horizontal
+                 deriving Eq
 
-horizontal :: [(Int, Int)] -> Bool
-horizontal spaces = and $ map (== x) xs
-    where xs = map fst spaces
-          x = head xs
+orientation :: [(Int, Int)] -> Maybe Orientation
+orientation spaces
+    | inLine spaces Vertical = Just Vertical
+    | inLine spaces Horizontal = Just Horizontal
+    | otherwise = Nothing
+
+inLine :: [(Int, Int)] -> Orientation -> Bool
+inLine spaces orientation = and $ map (== c) cs
+    where choose = case orientation of
+                     Vertical   -> fst
+                     Horizontal -> snd
+          cs = map choose spaces
+          c = head cs
+
+getPossibleWord :: Board -> (Tile, (Int, Int)) -> Orientation -> String
+getPossibleWord board (tile, (x, y)) orientation
+    | orientation == Horizontal = let left  = (\n -> (n, y)) <$> [0 .. (x - 1)]
+                                      right = (\n -> (n, y)) <$> [(x + 1) .. 14]
+                                      rightTiles = getConnectedTiles board right
+                                      leftTiles  = reverse $ getConnectedTiles board $ reverse left
+                                  in leftTiles ++ [tile] ++ rightTiles >>= show
+    | orientation == Vertical = undefined
+    where getConnectedTiles board spaces = map fromJust $ takeWhile isJust $ map (getTile board) spaces

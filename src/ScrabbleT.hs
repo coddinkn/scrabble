@@ -21,7 +21,7 @@ import Control.Monad.Reader
 import Control.Monad.Except
 import Data.List.Ordered
 
-newtype Monad m => ScrabbleT m a = ScrabbleT {
+newtype ScrabbleT m a = ScrabbleT {
     runScrabbleT :: ExceptT String (StateT GameState (ReaderT [String] m)) a
 } deriving (Functor, Applicative, Monad, 
             MonadError String, 
