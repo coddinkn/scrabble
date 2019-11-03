@@ -1,11 +1,4 @@
-module Board
-( Board
-, Modifier
-, emptyBoard
-, putTile
-, getPossibleWord
-, Orientation (Vertical, Horizontal)
-) where
+module Board where
 
 import Tile
 
@@ -87,7 +80,11 @@ putTile tile space (Board boardMap) = Board $ flip (insert space) boardMap $ Boa
 
 data Orientation = Vertical
                  | Horizontal
-                 deriving Eq
+                 deriving (Eq, Show)
+
+opposite :: Orientation -> Orientation
+opposite Vertical = Horizontal
+opposite Horizontal = Vertical
 
 orientation :: [(Int, Int)] -> Maybe Orientation
 orientation spaces
@@ -98,17 +95,40 @@ orientation spaces
 inLine :: [(Int, Int)] -> Orientation -> Bool
 inLine spaces orientation = and $ map (== c) cs
     where choose = case orientation of
-                     Vertical   -> fst
-                     Horizontal -> snd
+                     Vertical   -> snd
+                     Horizontal -> fst
           cs = map choose spaces
           c = head cs
 
-getPossibleWord :: Board -> (Tile, (Int, Int)) -> Orientation -> String
-getPossibleWord board (tile, (x, y)) orientation
-    | orientation == Horizontal = let left  = (\n -> (n, y)) <$> [0 .. (x - 1)]
-                                      right = (\n -> (n, y)) <$> [(x + 1) .. 14]
-                                      rightTiles = getConnectedTiles board right
-                                      leftTiles  = reverse $ getConnectedTiles board $ reverse left
-                                  in leftTiles ++ [tile] ++ rightTiles >>= show
-    | orientation == Vertical = undefined
-    where getConnectedTiles board spaces = map fromJust $ takeWhile isJust $ map (getTile board) spaces
+getWordFromTiles :: Board -> [(Tile, (Int, Int))] -> Maybe String
+getWordFromTiles board places = (\b t a -> b ++ t ++ a) <$> before <*> pure string <*> after
+    where direction = orientation $ map snd places
+          string = places >>= show . fst
+          before = getStringBefore board (head places) <$> direction
+          after = getStringAfter board (last places) <$> direction
+
+getStringBefore :: Board -> (Tile, (Int, Int)) -> Orientation -> String
+getStringBefore board (tile, (x, y)) orientation = map (head . show) $ reverse . getConnectedTiles board . reverse $ map getSpaces [0 .. (c - 1)]
+    where c = case orientation of
+                Vertical -> x
+                Horizontal -> y
+          getSpaces n = case orientation of
+                        Vertical -> (n, y)
+                        Horizontal -> (x, n)
+          getConnectedTiles board spaces = map fromJust $ takeWhile isJust $ map (getTile board) spaces
+
+getStringAfter :: Board -> (Tile, (Int, Int)) -> Orientation -> String
+getStringAfter board (tile, (x, y)) orientation = map (head . show) $ getConnectedTiles board $ map getSpaces [(c + 1) .. 14]
+    where c = case orientation of
+                Vertical -> x
+                Horizontal -> y
+          getSpaces n = case orientation of
+                        Vertical -> (n, y)
+                        Horizontal -> (x, n)
+          getConnectedTiles board spaces = map fromJust $ takeWhile isJust $ map (getTile board) spaces
+
+getWordFromTile :: Board -> (Tile, (Int, Int)) -> Orientation -> String
+getWordFromTile board (tile, (x, y)) orientation = before ++ show tile ++ after
+    where space = (tile, (x, y))
+          before = getStringBefore board space orientation
+          after = getStringAfter board space orientation

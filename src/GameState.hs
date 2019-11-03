@@ -2,7 +2,7 @@ module GameState where
 
 import Tile
 import Board
-import Player
+import Player hiding (tiles)
 
 import Data.List
 
@@ -22,6 +22,11 @@ addPlayer :: Username -> GameState -> GameState
 addPlayer username gameState = let newPlayer = Player username [] 0
                                    existingPlayers = players gameState
                                in gameState { players = newPlayer : existingPlayers }
+
+givePlayerTiles :: Player -> Int -> GameState -> GameState
+givePlayerTiles player n gameState = modifyPlayer player (Player.givePlayerTiles tilesToGive) $ gameState { tiles = newTiles }
+    where tilesToGive = take n $ tiles gameState
+          newTiles = drop n $ tiles gameState
 
 getPlayer :: Username -> GameState -> Maybe Player
 getPlayer playerUsername gameState = find sameUsername $ players gameState

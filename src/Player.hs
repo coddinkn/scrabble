@@ -15,3 +15,7 @@ type Players = [Player]
 
 changePlayerUsername :: Username -> Player -> Player
 changePlayerUsername newUsername player = player { username = newUsername }
+
+givePlayerTiles :: Tiles -> Player -> Player
+givePlayerTiles newTiles player = player { tiles = newTiles ++ oldTiles}
+    where oldTiles = tiles player

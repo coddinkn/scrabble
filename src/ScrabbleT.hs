@@ -5,21 +5,23 @@ module ScrabbleT
 , getScore
 , setTurn 
 , changeUsername
+, giveTiles
 , getPlayer
-, playTiles
+, placeTiles
 ) where
 
 import Board
 import Tile
 import Player
 import GameState hiding (addPlayer, getPlayer)
-import qualified GameState as GS (addPlayer, getPlayer)
+import qualified GameState as GS (addPlayer, getPlayer, givePlayerTiles)
 
 import Control.Monad.Trans
 import Control.Monad.State
 import Control.Monad.Reader
 import Control.Monad.Except
 import Data.List.Ordered
+import Data.Maybe
 
 newtype ScrabbleT m a = ScrabbleT {
     runScrabbleT :: ExceptT String (StateT GameState (ReaderT [String] m)) a
@@ -40,6 +42,10 @@ playScrabbleT game handler words = do (result, _) <- flip runReaderT words $ fli
                                              (const $ return ())
                                              result
 
+giveTiles :: Monad m => Username -> Int -> ScrabbleT m ()
+giveTiles username n = do player <- getPlayer username
+                          modify $ GS.givePlayerTiles player n
+
 getScore :: Monad m => Username -> ScrabbleT m Int
 getScore username = do player <- getPlayer username
                        return $ score player
@@ -57,6 +63,9 @@ changeUsername oldUsername newUsername =
     do player <- getPlayer oldUsername
        modify $ modifyPlayer player $ changePlayerUsername newUsername
 
+getBoard :: Monad m => ScrabbleT m Board
+getBoard = board <$> get
+
 getPlayer :: Monad m => Username -> ScrabbleT m Player
 getPlayer username = do maybePlayer <- GS.getPlayer username <$> get
                         maybe noPlayerException
@@ -64,9 +73,24 @@ getPlayer username = do maybePlayer <- GS.getPlayer username <$> get
                               maybePlayer 
     where noPlayerException = throwError $ "player " ++ username ++ " does not exist"
 
-playTiles :: Monad m => String -> Tiles -> ScrabbleT m ()
-playTiles username tilesToPlay = do player <- getPlayer username
-                                    if subset tilesToPlay $ Player.tiles player
-                                    then return ()
-                                    else throwError $ wrongTilesError tilesToPlay $ Player.tiles player
-    where wrongTilesError toPlay tiles = show toPlay ++ " is not a subset of " ++ show tiles
+scoreWord :: Monad m => String -> ScrabbleT m Int
+scoreWord word = do words <- ask
+                    unless (word `elem` words) $ throwError $ word ++ " is not a valid word"
+                    return 1
+
+tallyScore :: Monad m => Int -> String -> ScrabbleT m Int
+tallyScore score word = (+ score) <$> scoreWord word
+
+placeTiles :: Monad m => String -> [(Tile, (Int, Int))] -> ScrabbleT m Int
+placeTiles username placing =
+    do player <- getPlayer username
+       board <- getBoard
+       unless (subset tiles $ Player.tiles player) (throwError $ wrongTilesError $ Player.tiles player)
+       case orientation posns of
+          Just direction -> let perpWords = filter (\word -> length word > 1) $ map (flip (getWordFromTile board) $ opposite direction) placing
+                                allWords = (fromJust $ getWordFromTiles board placing) : perpWords
+                            in foldM tallyScore 0 allWords
+          Nothing -> throwError "Tiles not placed in a consecutive line"
+    where tiles = map fst placing
+          posns = map snd placing
+          wrongTilesError playerTiles = show tiles ++ " is not a subset of " ++ show playerTiles
