@@ -7,6 +7,7 @@ module ScrabbleT
 , changeUsername
 , giveTiles
 , getPlayer
+, getBoard
 , placeTiles
 ) where
 
@@ -20,7 +21,7 @@ import Control.Monad.Trans
 import Control.Monad.State
 import Control.Monad.Reader
 import Control.Monad.Except
-import Data.List.Ordered
+import Data.List
 import Data.Maybe
 
 newtype ScrabbleT m a = ScrabbleT {
@@ -47,8 +48,11 @@ giveTiles username n = do player <- getPlayer username
                           modify $ GS.givePlayerTiles player n
 
 getScore :: Monad m => Username -> ScrabbleT m Int
-getScore username = do player <- getPlayer username
-                       return $ score player
+getScore username = score <$> getPlayer username
+
+changeScore :: Monad m => Player -> (Int -> Int) -> ScrabbleT m Int
+changeScore player change = do modify $ modifyPlayer player $ changePlayerScore change
+                               getScore $ Player.username player
 
 setTurn :: Monad m => Username -> ScrabbleT m ()
 setTurn username = do gameState <- get
@@ -64,14 +68,14 @@ changeUsername oldUsername newUsername =
        modify $ modifyPlayer player $ changePlayerUsername newUsername
 
 getBoard :: Monad m => ScrabbleT m Board
-getBoard = board <$> get
+getBoard = gets board
 
 getPlayer :: Monad m => Username -> ScrabbleT m Player
-getPlayer username = do maybePlayer <- GS.getPlayer username <$> get
+getPlayer username = do maybePlayer <- gets $ GS.getPlayer username
                         maybe noPlayerException
                               return
                               maybePlayer 
-    where noPlayerException = throwError $ "player " ++ username ++ " does not exist"
+    where noPlayerException = throwError $ "Player " ++ username ++ " does not exist"
 
 scoreWord :: Monad m => String -> ScrabbleT m Int
 scoreWord word = do words <- ask
@@ -81,16 +85,21 @@ scoreWord word = do words <- ask
 tallyScore :: Monad m => Int -> String -> ScrabbleT m Int
 tallyScore score word = (+ score) <$> scoreWord word
 
-placeTiles :: Monad m => String -> [(Tile, (Int, Int))] -> ScrabbleT m Int
-placeTiles username placing =
+placeTile :: Monad m => TilePlacement -> ScrabbleT m ()
+placeTile = modify . modifyBoard . putTile
+
+placeTiles :: Monad m => String -> [TilePlacement] -> ScrabbleT m Int
+placeTiles username tilePlacements =
     do player <- getPlayer username
        board <- getBoard
-       unless (subset tiles $ Player.tiles player) (throwError $ wrongTilesError $ Player.tiles player)
-       case orientation posns of
-          Just direction -> let perpWords = filter (\word -> length word > 1) $ map (flip (getWordFromTile board) $ opposite direction) placing
-                                allWords = (fromJust $ getWordFromTiles board placing) : perpWords
-                            in foldM tallyScore 0 allWords
+       unless (tiles `isSubsequenceOf` Player.tiles player) (throwError $ wrongTilesError $ Player.tiles player)
+       case orientation positions of
+          Just direction -> let perpWords = filter (\word -> length word > 1) $ map (flip (getWordFromTilePlacement board) $ opposite direction) tilePlacements
+                                allWords = fromJust (getWordFromTilePlacements board tilePlacements) : perpWords
+                            in do forM_ tilePlacements placeTile
+                                  delta <- foldM tallyScore 0 allWords
+                                  changeScore player (+delta)
           Nothing -> throwError "Tiles not placed in a consecutive line"
-    where tiles = map fst placing
-          posns = map snd placing
+    where tiles = sort $ map tile tilePlacements
+          positions = map position tilePlacements
           wrongTilesError playerTiles = show tiles ++ " is not a subset of " ++ show playerTiles

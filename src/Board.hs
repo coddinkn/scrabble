@@ -1,24 +1,34 @@
-module Board where
+module Board
+( TilePlacement (TilePlacement)
+, Position
+, Board
+, putTile
+, tile
+, position
+, getWordFromTilePlacement
+, getWordFromTilePlacements
+, orientation
+, opposite
+, emptyBoard
+) where
 
 import Tile
 
 import Prelude hiding (lookup)
 import Data.Map hiding (map)
+import Data.List (find)
 import Data.Maybe
 
-data BoardTile = BoardTile { tile     :: Maybe Tile
-                           , modifier :: Maybe Modifier
-                           } deriving Eq
+boardMax = 14
+boardMin = 0
 
-instance Show BoardTile where
-    show (BoardTile maybeTile maybeModifier) = maybe emptyTile show maybeTile
-        where emptyTile = maybe " " show maybeModifier 
+type Position = (Int, Int)
 
 data Modifier = DoubleLetter
               | TripleLetter
               | DoubleWord
               | TripleWord
-              deriving (Eq)
+              deriving Eq
 
 instance Show Modifier where
     show DoubleLetter = "1"
@@ -26,19 +36,31 @@ instance Show Modifier where
     show DoubleWord   = "3"
     show TripleWord   = "4"
 
-newtype Board = Board (Map (Int, Int) BoardTile)
+data TilePlacement = TilePlacement { tile :: Tile
+                                   , position :: Position
+                                   } deriving Eq
+
+newtype Board = Board (Map Position Tile)
     deriving Eq
 
-instance Show Board where
-    show (Board boardMap)= concat $ showSpace <$> toAscList boardMap
-         where showSpace ((x, y), boardTile) = show boardTile ++ 
-                                                    if y == 14 && x /= 14
-                                                    then "\n"
-                                                    else ""
+tiles :: Board -> Map Position Tile
+tiles (Board tileMap) = tileMap
 
-spaceModifier :: (Int, Int) -> Maybe Modifier
-spaceModifier space
-    | space `elem` [ (0,  3), (0,  11)
+showPosition :: Board -> Position -> String
+showPosition board position = let maybeTile = getTile board position
+                                  noTile = maybe " " show $ modifier position
+                                  (column, row) = position
+                              in maybe noTile show maybeTile ++ if row == boardMax && column /= boardMax
+                                                                then "\n"
+                                                                else ""
+
+instance Show Board where
+    show board = positions >>= showPosition board
+        where positions = (,) <$> [boardMin .. boardMax] <*> [boardMin .. boardMax]
+
+modifier :: Position -> Maybe Modifier
+modifier position
+    | position `elem` [ (0,  3), (0,  11)
                    , (2,  6), (2,   8)
                    , (3,  0), (3,   7), (3,  14)
                    , (6,  2), (6,   6), (6,   8), (6, 12)
@@ -48,35 +70,30 @@ spaceModifier space
                    , (12, 6), (12,  8)
                    , (14, 3), (14, 11)
                    ] = Just DoubleLetter
-    | space `elem` [ (1,  5), (1,  9)
+    | position `elem` [ (1,  5), (1,  9)
                    , (5,  1), (5,  5), (5, 9), (5, 13)
                    , (9,  1), (9,  5), (9, 9), (9, 13)
                    , (13, 5), (13, 9)
                    ] = Just TripleLetter 
-    | space `elem` [ (1,   1), (2,   2), (3,   3), (4,   4)
+    | position `elem` [ (1,   1), (2,   2), (3,   3), (4,   4)
                    , (13,  1), (12,  2), (11,  3), (10,  4)
                    , (1,  13), (2,  12), (3,  11), (4,  10)
                    , (13, 13), (12, 12), (11, 11), (10, 10)
                    ] = Just DoubleWord 
-    | space `elem` [ (0,  0), (0,  7), (0,  14)
+    | position `elem` [ (0,  0), (0,  7), (0,  14)
                    , (7,  0), (7, 14)
                    , (14, 0), (14, 7), (14, 14) 
                    ] = Just TripleWord 
     | otherwise = Nothing
 
-makeBoardTile :: (Int, Int) -> BoardTile
-makeBoardTile space = BoardTile Nothing $ spaceModifier space
-
 emptyBoard :: Board
-emptyBoard = Board . fromDistinctAscList $ makeBoardSpace <$> spaces
-    where spaces = (,) <$> [0..14] <*> [0..14]
-          makeBoardSpace space = (space, makeBoardTile space)
+emptyBoard = Board empty
 
-getTile :: Board -> (Int, Int) -> Maybe Tile
-getTile (Board boardTileMap) space = lookup space boardTileMap >>= tile
+getTile :: Board -> Position -> Maybe Tile
+getTile board position = lookup position $ tiles board
 
-putTile :: Tile -> (Int, Int) -> Board -> Board
-putTile tile space (Board boardMap) = Board $ flip (insert space) boardMap $ BoardTile (Just tile) (spaceModifier space)
+putTile :: TilePlacement -> Board -> Board
+putTile (TilePlacement tile position) board = Board $ insert position tile $ tiles board
 
 data Orientation = Vertical
                  | Horizontal
@@ -86,49 +103,61 @@ opposite :: Orientation -> Orientation
 opposite Vertical = Horizontal
 opposite Horizontal = Vertical
 
-orientation :: [(Int, Int)] -> Maybe Orientation
-orientation spaces
-    | inLine spaces Vertical = Just Vertical
-    | inLine spaces Horizontal = Just Horizontal
-    | otherwise = Nothing
-
-inLine :: [(Int, Int)] -> Orientation -> Bool
-inLine spaces orientation = and $ map (== c) cs
+inLine :: [Position] -> Orientation -> Bool
+inLine spaces orientation = all (== c) cs
     where choose = case orientation of
                      Vertical   -> snd
                      Horizontal -> fst
           cs = map choose spaces
           c = head cs
 
-getWordFromTiles :: Board -> [(Tile, (Int, Int))] -> Maybe String
-getWordFromTiles board places = (\b t a -> b ++ t ++ a) <$> before <*> pure string <*> after
-    where direction = orientation $ map snd places
-          string = places >>= show . fst
-          before = getStringBefore board (head places) <$> direction
-          after = getStringAfter board (last places) <$> direction
+orientation :: [Position] -> Maybe Orientation
+orientation spaces
+    | inLine spaces Vertical = Just Vertical
+    | inLine spaces Horizontal = Just Horizontal
+    | otherwise = Nothing
 
-getStringBefore :: Board -> (Tile, (Int, Int)) -> Orientation -> String
-getStringBefore board (tile, (x, y)) orientation = map (head . show) $ reverse . getConnectedTiles board . reverse $ map getSpaces [0 .. (c - 1)]
-    where c = case orientation of
-                Vertical -> x
-                Horizontal -> y
-          getSpaces n = case orientation of
-                        Vertical -> (n, y)
-                        Horizontal -> (x, n)
-          getConnectedTiles board spaces = map fromJust $ takeWhile isJust $ map (getTile board) spaces
 
-getStringAfter :: Board -> (Tile, (Int, Int)) -> Orientation -> String
-getStringAfter board (tile, (x, y)) orientation = map (head . show) $ getConnectedTiles board $ map getSpaces [(c + 1) .. 14]
-    where c = case orientation of
-                Vertical -> x
-                Horizontal -> y
-          getSpaces n = case orientation of
-                        Vertical -> (n, y)
-                        Horizontal -> (x, n)
-          getConnectedTiles board spaces = map fromJust $ takeWhile isJust $ map (getTile board) spaces
+getCharBetween :: Board -> [TilePlacement] -> Position -> Maybe Char
+getCharBetween board tilePlacements posn = maybe (head . show <$> getTile board posn)
+                                                 return
+                                                 $ head . show . tile <$> tilePlacement
+    where tilePlacement = find (\tilePlacement -> position tilePlacement == posn) tilePlacements
 
-getWordFromTile :: Board -> (Tile, (Int, Int)) -> Orientation -> String
-getWordFromTile board (tile, (x, y)) orientation = before ++ show tile ++ after
-    where space = (tile, (x, y))
-          before = getStringBefore board space orientation
-          after = getStringAfter board space orientation
+getStringBetween :: Board -> [TilePlacement] -> Orientation -> Maybe String
+getStringBetween board tilePlacements orientation = mapM (getCharBetween board tilePlacements) range
+    where positions = map position tilePlacements
+          (constant, selector) = case orientation of
+                                      Vertical -> (snd $ head positions, fst)
+                                      Horizontal -> (fst $ head positions, snd)
+          max = maximum $ map selector positions
+          min = minimum $ map selector positions
+          range = case orientation of
+                       Vertical -> [min .. max] `zip` repeat constant
+                       Horizontal -> repeat constant `zip` [min .. max]
+
+data Direction = Before
+               | After
+
+getString :: Board -> TilePlacement -> Orientation -> Direction -> String
+getString board tilePlacement orientation direction = (adjust . getConnectedTiles . adjust $ map makePosition range) >>= show
+    where (column, row) = position tilePlacement
+          (limit, makePosition) = case orientation of
+                                       Vertical -> (column, \n -> (n, row))
+                                       Horizontal -> (row, \n -> (column, n))
+          (range, adjust) = case direction of
+                       Before -> ([boardMin .. (limit - 1)], reverse)
+                       After -> ([(limit + 1) .. boardMax], id)
+          getConnectedTiles = map fromJust . takeWhile isJust . map (getTile board)
+
+getWordFromTilePlacement :: Board -> TilePlacement -> Orientation -> String
+getWordFromTilePlacement board tilePlacement orientation = before ++ show (tile tilePlacement) ++ after
+    where before = getString board tilePlacement orientation Before
+          after = getString board tilePlacement orientation After
+
+getWordFromTilePlacements :: Board -> [TilePlacement] -> Maybe String
+getWordFromTilePlacements board tilePlacements = do orientation <- orientation $ position <$> tilePlacements
+                                                    let before = getString board (head tilePlacements) orientation Before
+                                                        after = getString board (last tilePlacements) orientation After
+                                                    between <- getStringBetween board tilePlacements orientation
+                                                    return $ mconcat [before, between, after]

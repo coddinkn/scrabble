@@ -3,11 +3,12 @@ module Player where
 import Tile
 
 import Data.Maybe (isNothing, fromMaybe)
+import Data.List (sort)
 
 type Username = String
 
 data Player = Player { username  :: Username
-                     , tiles     :: Tiles
+                     , tiles     :: [Tile]
                      , score     :: Int
                      } deriving Eq
 
@@ -16,6 +17,10 @@ type Players = [Player]
 changePlayerUsername :: Username -> Player -> Player
 changePlayerUsername newUsername player = player { username = newUsername }
 
-givePlayerTiles :: Tiles -> Player -> Player
-givePlayerTiles newTiles player = player { tiles = newTiles ++ oldTiles}
+changePlayerScore :: (Int -> Int) -> Player -> Player
+changePlayerScore modify player = player { score = modify oldScore }
+    where oldScore = score player
+
+givePlayerTiles :: [Tile] -> Player -> Player
+givePlayerTiles newTiles player = player { tiles = sort $ newTiles ++ oldTiles}
     where oldTiles = tiles player

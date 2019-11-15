@@ -14,4 +14,4 @@ import ScrabbleT
 type ScrabbleIO a = ScrabbleT IO a
 
 playScrabbleIO :: ScrabbleIO () -> [String] -> IO ()
-playScrabbleIO game words = playScrabbleT game putStrLn words
+playScrabbleIO game = playScrabbleT game putStrLn

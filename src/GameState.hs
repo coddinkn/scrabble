@@ -8,12 +8,12 @@ import Data.List
 
 data GameState = GameState { players  :: Players
                            , board    :: Board
-                           , tiles    :: Tiles
+                           , tiles    :: [Tile]
                            , whosTurn :: Maybe Player
                            }
 
-startTiles :: Tiles
-startTiles = replicate 100 $ Tile 'A'
+startTiles :: [Tile]
+startTiles = sort . map Tile $ "BATCATS"
 
 newGame :: GameState
 newGame = GameState [] emptyBoard startTiles Nothing
@@ -31,6 +31,10 @@ givePlayerTiles player n gameState = modifyPlayer player (Player.givePlayerTiles
 getPlayer :: Username -> GameState -> Maybe Player
 getPlayer playerUsername gameState = find sameUsername $ players gameState
     where sameUsername player = playerUsername == username player
+
+modifyBoard :: (Board -> Board) -> GameState -> GameState
+modifyBoard modify gameState = gameState { board = modify currentBoard }
+    where currentBoard = board gameState
 
 modifyPlayer :: Player -> (Player -> Player) -> GameState -> GameState
 modifyPlayer player modify gameState =

@@ -5,5 +5,3 @@ newtype Tile = Tile Char
 
 instance Show Tile where
     show (Tile char) = [char]
-
-type Tiles = [Tile]
