@@ -13,7 +13,7 @@ data GameState = GameState { players  :: Players
                            }
 
 startTiles :: [Tile]
-startTiles = sort . map Tile $ "BATCATS"
+startTiles = map Tile "BATCATSBATCATS"
 
 newGame :: GameState
 newGame = GameState [] emptyBoard startTiles Nothing

@@ -92,14 +92,14 @@ placeTiles :: Monad m => String -> [TilePlacement] -> ScrabbleT m Int
 placeTiles username tilePlacements =
     do player <- getPlayer username
        board <- getBoard
-       unless (tiles `isSubsequenceOf` Player.tiles player) (throwError $ wrongTilesError $ Player.tiles player)
+       unless (tiles `isSubsequenceOf` Player.tiles player) (throwError . wrongTilesError $ Player.tiles player)
        case orientation positions of
           Just direction -> let perpWords = filter (\word -> length word > 1) $ map (flip (getWordFromTilePlacement board) $ opposite direction) tilePlacements
                                 allWords = fromJust (getWordFromTilePlacements board tilePlacements) : perpWords
                             in do forM_ tilePlacements placeTile
                                   delta <- foldM tallyScore 0 allWords
                                   changeScore player (+delta)
-          Nothing -> throwError "Tiles not placed in a consecutive line"
+          Nothing -> throwError "Tiles not placed in line"
     where tiles = sort $ map tile tilePlacements
           positions = map position tilePlacements
           wrongTilesError playerTiles = show tiles ++ " is not a subset of " ++ show playerTiles
