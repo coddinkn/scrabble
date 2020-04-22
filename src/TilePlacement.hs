@@ -1,5 +1,6 @@
 module TilePlacement
 ( TilePlacement (..)
+, lineUp
 ) where
 
 import Modifier
@@ -10,6 +11,7 @@ import Tile
 data TilePlacement = TilePlacement { tile :: Tile
                                    , position :: Position
                                    } deriving Eq
+
 
 modifierToScoreBuilder :: Modifier -> (Int -> (Int, Int))
 modifierToScoreBuilder DoubleLetter = \score -> (1, 2 * score)
@@ -25,3 +27,13 @@ instance Scorable TilePlacement where
                     $ modifier $ position placement  
             (multiplier, baseScore) = scoreBuilder . compute . score $ tile placement
         in Score multiplier baseScore
+
+instance Show TilePlacement where
+    show tilePlacement = show $ tile tilePlacement
+
+lineUp :: Orientation -> (TilePlacement -> TilePlacement -> Ordering)
+lineUp orientation =
+    let select = case orientation of
+                    Vertical   -> snd . position
+                    Horizontal -> fst . position
+    in \a b -> compare (select a) (select b)

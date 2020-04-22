@@ -12,10 +12,13 @@ module ScrabbleT
 ) where
 
 import Board
-import Tile
-import Player
 import GameState hiding (addPlayer, getPlayer)
 import qualified GameState as GS (addPlayer, getPlayer, givePlayerTiles)
+import Player
+import Tile
+import TilePlacement
+import Score
+import Word
 
 import Control.Monad.Trans
 import Control.Monad.State
@@ -48,7 +51,7 @@ giveTiles username n = do player <- getPlayer username
                           modify $ GS.givePlayerTiles player n
 
 getScore :: Monad m => Username -> ScrabbleT m Int
-getScore username = score <$> getPlayer username
+getScore username = playerScore <$> getPlayer username
 
 changeScore :: Monad m => Player -> (Int -> Int) -> ScrabbleT m Int
 changeScore player change = do modify $ modifyPlayer player $ changePlayerScore change
@@ -77,14 +80,6 @@ getPlayer username = do maybePlayer <- gets $ GS.getPlayer username
                               maybePlayer 
     where noPlayerException = throwError $ "Player " ++ username ++ " does not exist"
 
-scoreWord :: Monad m => String -> ScrabbleT m Int
-scoreWord word = do words <- ask
-                    unless (word `elem` words) $ throwError $ word ++ " is not a valid word"
-                    return 1
-
-tallyScore :: Monad m => Int -> String -> ScrabbleT m Int
-tallyScore score word = (+ score) <$> scoreWord word
-
 placeTile :: Monad m => TilePlacement -> ScrabbleT m ()
 placeTile = modify . modifyBoard . putTile
 
@@ -92,14 +87,12 @@ placeTiles :: Monad m => String -> [TilePlacement] -> ScrabbleT m Int
 placeTiles username tilePlacements =
     do player <- getPlayer username
        board <- getBoard
+       dictionary <- ask
        unless (tiles `isSubsequenceOf` Player.tiles player) (throwError . wrongTilesError $ Player.tiles player)
-       case orientation positions of
-          Just direction -> let perpWords = filter (\word -> length word > 1) $ map (flip (getWordFromTilePlacement board) $ opposite direction) tilePlacements
-                                allWords = fromJust (getWordFromTilePlacements board tilePlacements) : perpWords
-                            in do forM_ tilePlacements placeTile
-                                  delta <- foldM tallyScore 0 allWords
-                                  changeScore player (+delta)
-          Nothing -> throwError "Tiles not placed in line"
+       words <- liftEither $ getWords dictionary board tilePlacements
+       mapM_ placeTile tilePlacements
+       let addScore = (+) $ compute . mconcat $ map score words
+       changeScore player addScore
     where tiles = sort $ map tile tilePlacements
           positions = map position tilePlacements
           wrongTilesError playerTiles = show tiles ++ " is not a subset of " ++ show playerTiles

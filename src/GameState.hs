@@ -6,7 +6,7 @@ import Player hiding (tiles)
 
 import Data.List
 
-data GameState = GameState { players  :: Players
+data GameState = GameState { players  :: [Player]
                            , board    :: Board
                            , tiles    :: [Tile]
                            , whosTurn :: Maybe Player
