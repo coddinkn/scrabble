@@ -5,7 +5,7 @@ module Score
 ) where
 
 data Score = Score Int Int
-    deriving Eq
+    deriving (Eq, Show)
 
 instance Semigroup Score where
     (Score aMul aScore) <> (Score bMul bScore) =

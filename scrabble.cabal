@@ -43,8 +43,20 @@ library
 executable scrabble
   import: shared-properties
   main-is: Main.hs
-  hs-source-dirs:
-      src
+  hs-source-dirs: src
   ghc-options: -threaded -rtsopts -with-rtsopts=-N
   build-depends:
       scrabble
+
+test-suite spec
+  import: shared-properties
+  type: exitcode-stdio-1.0
+  main-is: Spec.hs
+  hs-source-dirs: test, lib
+  build-depends:
+    hspec == 2.*,
+    QuickCheck == 2.*,
+  build-tool-depends: hspec-discover:hspec-discover == 2.*
+  other-modules:
+    Score,
+    ScoreSpec
