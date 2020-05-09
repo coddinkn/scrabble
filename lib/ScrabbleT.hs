@@ -7,6 +7,7 @@ module ScrabbleT
 , getBoard
 , placeTiles
 , ready
+, whosTurn
 ) where
 
 import Board
@@ -40,79 +41,87 @@ instance MonadIO m => MonadIO (ScrabbleT m) where
     liftIO = lift . liftIO
 
 playScrabbleT :: Monad m => ScrabbleT m () -> (String -> m ()) -> [String] -> m ()
-playScrabbleT game handler words = do (result, _) <- flip runReaderT words $ flip runStateT GS.newGame . runExceptT $ runScrabbleT game
-                                      either handler
-                                             (const $ return ())
-                                             result
+playScrabbleT game handler words = do
+    (result, _) <- flip runReaderT words $ flip runStateT GS.newGame . runExceptT $ runScrabbleT game
+    either handler
+           (const $ return ())
+           result
 
 ready :: Monad m => Username -> ScrabbleT m Bool
-ready username =
-    do playerExists <- gets $ GS.checkUsername username
-       unless playerExists . throwError $ "Player " ++ username ++ " not found"
-       modify $ GS.ready username
-       started <- gets GS.started
-       when started . modify $ GS.setTurn username
-       return started
+ready username = do
+    playerExists <- gets $ GS.checkUsername username
+    unless playerExists . throwError $ "Player " ++ username ++ " not found"
+    modify $ GS.readyUser username
+    started <- (== GS.Started) <$> gets GS.getStatus
+    when started $ do
+        users <- gets GS.turnOrder
+        mapM_ (modify . GS.giveUserTiles 7) users
+    return started
 
 giveTiles :: Monad m => Int -> ScrabbleT m ()
-giveTiles n = do username <- whosTurn
-                 modify $ GS.givePlayerTiles username n
+giveTiles n = do
+    username <- whosTurn
+    modify $ GS.giveUserTiles n username
 
 getScore :: Monad m => Username -> ScrabbleT m Int
-getScore username = do playerExists <- gets $ GS.checkUsername username
-                       unless playerExists . throwError $ "Player " ++ username ++ " not found"
-                       gets $ GS.getFromPlayer username P.playerScore
+getScore username = do
+    maybeScore <- gets $ GS.getFromPlayer username P.playerScore
+    case maybeScore of
+        Just score -> return score
+        Nothing -> throwError $ "Player " ++ username ++ " not found"
 
 changeScore :: Monad m => Username -> (Int -> Int) -> ScrabbleT m Int
-changeScore username change =
-       do modify $ modifyPlayer username $ P.changePlayerScore change
-          getScore username
-
-nextTurn :: Monad m => ScrabbleT m ()
-nextTurn = modify GS.nextTurn
+changeScore username change = do
+    modify $ modifyPlayer username $ P.changePlayerScore change
+    getScore username
 
 addPlayer :: Monad m => Username -> ScrabbleT m ()
-addPlayer username = do modify $ GS.addPlayer username
-                        modify $ GS.givePlayerTiles username 7
+addPlayer username = modify $ GS.addUser username
 
 changeUsername :: Monad m => Username -> Username -> ScrabbleT m ()
-changeUsername oldUsername newUsername = do playerExists <- gets $ GS.checkUsername oldUsername
-                                            unless playerExists . throwError $ "Player " ++ oldUsername ++ " not found"
-                                            modify $ GS.changeUsername oldUsername newUsername
+changeUsername oldUsername newUsername = do
+    playerExists <- gets $ GS.checkUsername oldUsername
+    unless playerExists . throwError $ "Player " ++ oldUsername ++ " not found"
+    modify $ GS.changeUsername oldUsername newUsername
 
 getBoard :: Monad m => ScrabbleT m Board
 getBoard = gets GS.board
 
 whosTurn :: Monad m => ScrabbleT m Username
-whosTurn = do maybeUsername <- gets GS.whosTurn
-              case maybeUsername of
-                  Just username -> return username
-                  Nothing -> throwError $ "The game has not started"
-
-placeTile :: Monad m => TilePlacement -> ScrabbleT m ()
-placeTile = modify . modifyBoard . putTile
+whosTurn = do
+    status <- gets GS.getStatus
+    case status of
+        GS.Started -> gets GS.whosTurn
+        _ -> throwError $ "The game has not started"
 
 placeTiles :: Monad m => [TilePlacement] -> ScrabbleT m Int
-placeTiles tilePlacements =
-    do username <- whosTurn
-       board <- getBoard
-       dictionary <- ask
-       inPlayerTiles <- gets $ GS.getFromPlayer username (P.inPlayerTiles tiles)
-       unless inPlayerTiles $ do playerTiles <- gets $ GS.getFromPlayer username P.tiles
-                                 throwError $ wrongTilesError playerTiles
-       words <- liftEither $ getWords dictionary board tilePlacements
-       mapM_ placeTile tilePlacements
-       let addScore = (+) $ compute . mconcat $ map score words
-       nextTurn
-       changeScore username addScore
+placeTiles tilePlacements = do
+    username <- whosTurn
+    board <- getBoard
+    dictionary <- ask
+    inPlayerTiles <- fmap fromJust . gets $ GS.getFromPlayer username (P.inPlayerTiles tiles)
+    unless inPlayerTiles $ do
+        playerTiles <- gets $ GS.getFromPlayer username P.tiles
+        throwError $ wrongTilesError playerTiles
+    words <- liftEither $ getWords dictionary board tilePlacements
+    mapM_ placeTile tilePlacements
+    let addScore = (+) $ compute . mconcat $ map score words
+    modify GS.nextTurn
+    changeScore username addScore
     where tiles = sort $ map tile tilePlacements
+          placeTile = modify . modifyBoard . putTile
           positions = map position tilePlacements
           wrongTilesError playerTiles = show tiles ++ " is not a subset of " ++ show playerTiles
 
 pass :: Monad m => ScrabbleT m ()
-pass = do username <- whosTurn
-          undefined
+pass = do
+    username <- whosTurn
+    passedLastTurn <- fmap fromJust . gets $ GS.getFromPlayer username P.passedLastTurn
+    if passedLastTurn
+        then modify GS.endGame
+        else modify $ GS.modifyPlayer username P.markPass
 
-exchange :: Monad m => ScrabbleT m ()
-exchange = do username <- whosTurn
-              undefined
+exchange :: Monad m => Maybe Tile -> ScrabbleT m ()
+exchange maybeTile = do
+    username <- whosTurn
+    undefined

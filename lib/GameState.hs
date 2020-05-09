@@ -1,4 +1,21 @@
-module GameState where
+module GameState
+( Username
+, GameState (..)
+, modifyBoard
+, modifyPlayer
+, GameStatus (..)
+, newGame
+, getStatus
+, addUser
+, readyUser
+, checkUsername
+, nextTurn
+, changeUsername
+, giveUserTiles
+, getFromPlayer
+, startGame
+, endGame
+) where
 
 import Tile
 import Board
@@ -10,12 +27,32 @@ import qualified Data.Map.Strict as Map
 
 type Username = String
 
-data GameState = GameState { players  :: Map.Map Username Player
-                           , board    :: Board
-                           , tiles    :: [Tile]
-                           , order    :: [Username]
-                           , whosTurn :: Maybe Username
-                           }
+data GameStatus = WaitingToStart
+                | Started
+                | Ended
+                deriving Eq
+
+data GameState = Waiting { users      :: [Username]
+                         , readyUsers :: [Username]
+                         }
+
+               | InProgress { players   :: Map.Map Username Player
+                            , board     :: Board
+                            , tiles     :: [Tile]
+                            , turnOrder :: [Username]
+                            , whosTurn  :: Username
+                            }
+
+               | Over { winner :: Maybe Username
+                      , scores :: Map.Map Username Int
+                      }
+
+getStatus :: GameState -> GameStatus
+getStatus gameState =
+    case gameState of
+         Waiting    {} -> WaitingToStart
+         InProgress {} -> Started
+         Over       {} -> Ended
 
 startTiles :: [Tile]
 startTiles = map Tile "BATCATSBATCATS"
@@ -50,54 +87,87 @@ startTiles = map Tile "BATCATSBATCATS"
 -}
 
 newGame :: GameState
-newGame = GameState Map.empty emptyBoard startTiles [] Nothing
+newGame = Waiting [] []
 
-ready :: Username -> GameState -> GameState
-ready username gameState =
-    if username `elem` turnOrder
-    then gameState
-    else gameState { order = username:turnOrder }
-    where turnOrder = order gameState
+startGame :: GameState -> GameState
+startGame gameState =
+    case gameState of
+        Waiting users readyUsers ->
+            InProgress { players = Map.fromList $ zip users $ repeat newPlayer
+                       , board = emptyBoard
+                       , tiles = startTiles
+                       , turnOrder = readyUsers
+                       , whosTurn = head readyUsers
+                       }
+        _ -> gameState
 
-started :: GameState -> Bool
-started gameState =
-    let allPlayers   = Map.keys $ players gameState
-        readyPlayers = order gameState
-    in all (`elem` readyPlayers) allPlayers
+endGame :: GameState -> GameState
+endGame gameState =
+    case gameState of
+        InProgress {} -> Over { winner = Nothing
+                              , scores = fmap playerScore $ players gameState
+                              }
+        _ -> gameState
 
-addPlayer :: Username -> GameState -> GameState
-addPlayer username gameState = gameState { players = Map.insert username newPlayer existingPlayers }
-    where existingPlayers = players gameState
+readyUser :: Username -> GameState -> GameState
+readyUser username gameState =
+    case gameState of
+        Waiting users alreadyReady ->
+            if username `elem` alreadyReady
+            then gameState
+            else let newReadyUsers = username:alreadyReady
+                     newGameState = gameState { readyUsers = newReadyUsers }
+                 in if (sort newReadyUsers) == (sort users)
+                    then startGame newGameState
+                    else newGameState
+        _ -> gameState
 
-givePlayerTiles :: Username -> Int -> GameState -> GameState
-givePlayerTiles username n gameState = modifyPlayer username (Player.givePlayerTiles tilesToGive) $ gameState { tiles = newTiles }
-    where tilesToGive = take n $ tiles gameState
-          newTiles = drop n $ tiles gameState
+addUser :: Username -> GameState -> GameState
+addUser username gameState =
+    case gameState of
+        Waiting existingUsers _ ->
+            if username `elem` existingUsers
+            then gameState
+            else gameState { users = username:existingUsers }
+        _ -> gameState
+
+giveUserTiles :: Int -> Username -> GameState -> GameState
+giveUserTiles n username gameState =
+    case gameState of
+        InProgress {} ->
+            modifyPlayer username (Player.givePlayerTiles tilesToGive) $ gameState { tiles = newTiles }
+            where tilesToGive = take n $ tiles gameState
+                  newTiles = drop n $ tiles gameState
+        _ -> gameState
 
 checkUsername :: Username -> GameState -> Bool
-checkUsername username gameState = Map.member username $ players gameState
-
-getPlayer :: Username -> GameState -> Player
-getPlayer username = fromJust . Map.lookup username . players
+checkUsername username gameState =
+    case gameState of
+        Waiting    {} -> username `elem` users gameState
+        InProgress {} -> Map.member username $ players gameState
+        Over       {} -> Map.member username $ scores gameState
 
 modifyBoard :: (Board -> Board) -> GameState -> GameState
 modifyBoard modify gameState = gameState { board = modify currentBoard }
     where currentBoard = board gameState
 
-setTurn :: Username -> GameState -> GameState
-setTurn username gameState = gameState { whosTurn = Just username }
-
 nextTurn :: GameState -> GameState
 nextTurn gameState =
-    gameState { whosTurn = do current <- whosTurn gameState
-                              let turnOrder = order gameState
-                              currentIndex <- current `elemIndex` turnOrder
-                              let nextIndex = (currentIndex + 1) `mod` (length turnOrder)
-                              return $ turnOrder !! nextIndex
-              }
+    case gameState of
+        InProgress {} ->
+            let currentIndex = fromJust $ current `elemIndex` order
+                nextIndex = (currentIndex + 1) `mod` (length order)
+                next = order !! nextIndex
+            in gameState { whosTurn = next }
+            where current = whosTurn gameState
+                  order = turnOrder gameState
+        _ -> gameState
 
-getFromPlayer :: Username -> (Player -> a) -> GameState -> a
-getFromPlayer username get = get . getPlayer username
+getFromPlayer :: Username -> (Player -> a) -> GameState -> Maybe a
+getFromPlayer username get gameState =
+    case gameState of
+        InProgress {} -> fmap get . Map.lookup username $ players gameState
+        _ -> Nothing
 
 modifyPlayer :: Username -> (Player -> Player) -> GameState -> GameState
 modifyPlayer username modify gameState = gameState { players = Map.adjust modify username oldPlayers }
@@ -105,8 +175,17 @@ modifyPlayer username modify gameState = gameState { players = Map.adjust modify
 
 changeUsername :: Username -> Username -> GameState -> GameState
 changeUsername oldUsername newUsername gameState =
-    let playersWithout = Map.delete oldUsername $ players gameState
-        maybePlayer = Map.lookup oldUsername $ players gameState
-    in case maybePlayer of
-        Just player -> gameState { players = Map.insert newUsername player playersWithout }
-        Nothing -> gameState
+    case gameState of
+        Waiting {} ->
+            let usersWithout = delete oldUsername $ users gameState
+                readyWithout = delete oldUsername $ readyUsers gameState
+            in if readyWithout == readyUsers gameState
+               then gameState { users = newUsername:usersWithout }
+               else gameState { users = newUsername:usersWithout, readyUsers = newUsername:readyWithout }
+        InProgress {} ->
+            let playersWithout = Map.delete oldUsername $ players gameState
+                maybePlayer = Map.lookup oldUsername $ players gameState
+            in case maybePlayer of
+                Just player -> gameState { players = Map.insert newUsername player playersWithout }
+                Nothing -> gameState
+        _ -> gameState
