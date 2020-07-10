@@ -10,6 +10,8 @@ import Tile
 import TilePlacement
 import Score
 
+import Control.Monad (unless)
+import Data.Either (isLeft, rights)
 import Data.List (sortBy, find)
 import Data.Maybe (fromJust, isJust, catMaybes)
 import Prelude hiding (Word)
@@ -25,8 +27,14 @@ instance Show Letter where
 tileToLetter :: Tile -> Letter
 tileToLetter = Letter . Left
 
+unLetter :: Letter -> Either Tile TilePlacement
+unLetter (Letter value) = value
+
 tilePlacementToLetter :: TilePlacement -> Letter
 tilePlacementToLetter = Letter . Right
+
+fromBoard :: Letter -> Bool
+fromBoard = isLeft . unLetter
 
 newtype Word = Word [Letter]
 
@@ -41,11 +49,29 @@ data Direction = Before
 
 type Dictionary = [String]
 
-checkWord :: Dictionary -> Word -> Either String Word
-checkWord dictionary word =
-    if show word `elem` dictionary
-    then Right word
-    else Left $ show word ++ " is not in the dictionary"
+checkDictionary :: Dictionary -> Word -> Either String ()
+checkDictionary dictionary word =
+    unless inDictionary . Left $ show word ++ " is not in the dictionary"
+    where inDictionary = show word `elem` dictionary
+
+crossesCenter :: Word -> Bool
+crossesCenter (Word letters) =
+    elem (7, 7) . map position . rights $ map unLetter letters
+
+containsLetterFromBoard :: Word -> Bool
+containsLetterFromBoard (Word letters) = any fromBoard letters
+
+checkIsFirstPlay :: Word -> Board -> Either String ()
+checkIsFirstPlay word board
+    | board /= emptyBoard = Left "you must include an existing letter in your word"
+    | not $ crossesCenter word = Left "the first word must cross through the center tile"
+    | otherwise = return ()
+
+checkWord :: Dictionary -> Board -> Word -> Either String Word
+checkWord dictionary board word = do
+    checkDictionary dictionary word
+    unless (containsLetterFromBoard word) $ checkIsFirstPlay word board
+    return word
 
 getWords :: Dictionary -> Board -> [TilePlacement] -> Either String [Word]
 
@@ -64,7 +90,7 @@ getWords dictionary board tilePlacements =
         let perpWords = catMaybes $ map getPerpWord tilePlacements
         in do word <- getWordFromTilePlacements dictionary board orientation tilePlacements
               let words = word:perpWords
-              mapM (checkWord dictionary) words
+              mapM (checkWord dictionary board) words
         where getPerpWord = getWordFromTilePlacement board $ opposite orientation
       Nothing -> Left "Tiles not placed in single row or column"
 
