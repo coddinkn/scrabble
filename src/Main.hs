@@ -14,6 +14,10 @@ scrabble = do
                , flip TilePlacement (7, 8) $ Tile 'T'
                ] >>= liftIO . print
     getBoard >>= liftIO . print
+    placeTiles [ flip TilePlacement (6, 5) $ Tile 'A'
+               , flip TilePlacement (6, 6) $ Tile 'B'
+               ]
+    getBoard >>= liftIO . print
     placeTiles [ flip TilePlacement (6, 7) $ Tile 'C'
                , flip TilePlacement (8, 7) $ Tile 'T'
                ] >>= liftIO . print
@@ -31,5 +35,8 @@ main =
                 , "CAT"
                 , "CATS"
                 , "BATS"
+                , "AB"
+                , "BB"
+                , "ABC"
                 ]
     in playScrabbleIO scrabble words

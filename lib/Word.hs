@@ -49,10 +49,33 @@ data Direction = Before
 
 type Dictionary = [String]
 
-checkDictionary :: Dictionary -> Word -> Either String ()
-checkDictionary dictionary word =
+checkWord :: Dictionary -> Word -> Either String Word
+checkWord dictionary word = do
     unless inDictionary . Left $ show word ++ " is not in the dictionary"
+    return word
     where inDictionary = show word `elem` dictionary
+
+
+getWords' :: Dictionary -> Board -> [TilePlacement] -> Either String [Word]
+
+getWords' dictionary board [] = Left "No tiles placed"
+
+getWords' dictionary board [tilePlacement]
+    | isJust maybeVerticalWord   = Right [fromJust maybeVerticalWord]
+    | isJust maybeHorizontalWord = Right [fromJust maybeHorizontalWord]
+    | otherwise = Left "Tile not placed near other tiles!"
+    where maybeVerticalWord   = getWordFromTilePlacement board Vertical   tilePlacement
+          maybeHorizontalWord = getWordFromTilePlacement board Horizontal tilePlacement
+
+getWords' dictionary board tilePlacements =
+    case orientation $ position <$> tilePlacements of
+      Just orientation ->
+        let perpWords = catMaybes $ map getPerpWord tilePlacements
+        in do word <- getWordFromTilePlacements dictionary board orientation tilePlacements
+              let words = word:perpWords
+              mapM (checkWord dictionary) words
+        where getPerpWord = getWordFromTilePlacement board $ opposite orientation
+      Nothing -> Left "Tiles not placed in single row or column"
 
 crossesCenter :: Word -> Bool
 crossesCenter (Word letters) =
@@ -61,38 +84,17 @@ crossesCenter (Word letters) =
 containsLetterFromBoard :: Word -> Bool
 containsLetterFromBoard (Word letters) = any fromBoard letters
 
-checkIsFirstPlay :: Word -> Board -> Either String ()
-checkIsFirstPlay word board
+checkIsFirstPlay :: [Word] -> Board -> Either String ()
+checkIsFirstPlay words board
     | board /= emptyBoard = Left "you must include an existing letter in your word"
-    | not $ crossesCenter word = Left "the first word must cross through the center tile"
+    | not $ any crossesCenter words = Left "the first word must cross through the center tile"
     | otherwise = return ()
 
-checkWord :: Dictionary -> Board -> Word -> Either String Word
-checkWord dictionary board word = do
-    checkDictionary dictionary word
-    unless (containsLetterFromBoard word) $ checkIsFirstPlay word board
-    return word
-
 getWords :: Dictionary -> Board -> [TilePlacement] -> Either String [Word]
-
-getWords dictionary board [] = Left "No tiles placed"
-
-getWords dictionary board [tilePlacement]
-    | isJust maybeVerticalWord   = Right [fromJust maybeVerticalWord]
-    | isJust maybeHorizontalWord = Right [fromJust maybeHorizontalWord]
-    | otherwise = Left "Tile not placed near other tiles!"
-    where maybeVerticalWord   = getWordFromTilePlacement board Vertical   tilePlacement
-          maybeHorizontalWord = getWordFromTilePlacement board Horizontal tilePlacement
-
-getWords dictionary board tilePlacements =
-    case orientation $ position <$> tilePlacements of
-      Just orientation ->
-        let perpWords = catMaybes $ map getPerpWord tilePlacements
-        in do word <- getWordFromTilePlacements dictionary board orientation tilePlacements
-              let words = word:perpWords
-              mapM (checkWord dictionary board) words
-        where getPerpWord = getWordFromTilePlacement board $ opposite orientation
-      Nothing -> Left "Tiles not placed in single row or column"
+getWords dictionary board tilePlacements = do
+    words <- getWords' dictionary board tilePlacements
+    unless (any containsLetterFromBoard words) $ checkIsFirstPlay words board
+    return words
 
 getLetters :: Board -> TilePlacement -> Orientation -> Direction -> [Letter]
 getLetters board tilePlacement orientation direction = 
