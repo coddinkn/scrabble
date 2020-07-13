@@ -54,48 +54,16 @@ getStatus gameState =
          InProgress {} -> Started
          Over       {} -> Ended
 
-startTiles :: [Tile]
-startTiles = map Tile "BATCATSBATCATS"
-{-
-    concat $ map (map Tile . uncurry replicate)
-        [ (9, 'A')
-        , (2, 'B')
-        , (2, 'C')
-        , (4, 'D')
-        , (12,'E')
-        , (2, 'F')
-        , (3, 'G')
-        , (2, 'H')
-        , (9, 'I')
-        , (1, 'J')
-        , (1, 'K')
-        , (4, 'L')
-        , (2, 'M')
-        , (6, 'N')
-        , (8, 'O')
-        , (2, 'P')
-        , (1, 'Q')
-        , (6, 'R')
-        , (4, 'S')
-        , (6, 'T')
-        , (4, 'U')
-        , (2, 'V')
-        , (2, 'W')
-        , (1, 'X')
-        , (2, 'Y')
-        , (1, 'Z') ]
--}
-
 newGame :: GameState
 newGame = Waiting [] []
 
-startGame :: GameState -> GameState
-startGame gameState =
+startGame :: [Tile] -> GameState -> GameState
+startGame randomTiles gameState =
     case gameState of
         Waiting users readyUsers ->
             InProgress { players = Map.fromList $ zip users $ repeat newPlayer
                        , board = emptyBoard
-                       , tiles = startTiles
+                       , tiles = randomTiles
                        , turnOrder = readyUsers
                        , whosTurn = head readyUsers
                        }
@@ -109,8 +77,8 @@ endGame gameState =
                               }
         _ -> gameState
 
-readyUser :: Username -> GameState -> GameState
-readyUser username gameState =
+readyUser :: [Tile] -> Username -> GameState -> GameState
+readyUser randomTiles username gameState =
     case gameState of
         Waiting users alreadyReady ->
             if username `elem` alreadyReady
@@ -118,7 +86,7 @@ readyUser username gameState =
             else let newReadyUsers = username:alreadyReady
                      newGameState = gameState { readyUsers = newReadyUsers }
                  in if (sort newReadyUsers) == (sort users)
-                    then startGame newGameState
+                    then startGame randomTiles newGameState
                     else newGameState
         _ -> gameState
 

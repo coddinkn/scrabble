@@ -6,8 +6,8 @@ scrabble :: ScrabbleIO ()
 scrabble = do
     addPlayer "dmr"
     addPlayer "knc"
-    ready "knc"
-    ready "dmr"
+    readyWithTiles "knc" $ map Tile "BATCATSBATCATS"
+    readyWithTiles "dmr" $ map Tile "BATCATSBATCATS"
     getBoard >>= liftIO . print
     placeTiles [ flip TilePlacement (7, 6) $ Tile 'B'
                , flip TilePlacement (7, 7) $ Tile 'A'
@@ -16,7 +16,7 @@ scrabble = do
     getBoard >>= liftIO . print
     placeTiles [ flip TilePlacement (6, 5) $ Tile 'A'
                , flip TilePlacement (6, 6) $ Tile 'B'
-               ]
+               ] >>= liftIO . print
     getBoard >>= liftIO . print
     placeTiles [ flip TilePlacement (6, 7) $ Tile 'C'
                , flip TilePlacement (8, 7) $ Tile 'T'

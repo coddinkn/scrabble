@@ -55,19 +55,18 @@ checkWord dictionary word = do
     return word
     where inDictionary = show word `elem` dictionary
 
+getPotentialWords :: Dictionary -> Board -> [TilePlacement] -> Either String [Word]
 
-getWords' :: Dictionary -> Board -> [TilePlacement] -> Either String [Word]
+getPotentialWords dictionary board [] = Left "No tiles placed"
 
-getWords' dictionary board [] = Left "No tiles placed"
-
-getWords' dictionary board [tilePlacement]
+getPotentialWords dictionary board [tilePlacement]
     | isJust maybeVerticalWord   = Right [fromJust maybeVerticalWord]
     | isJust maybeHorizontalWord = Right [fromJust maybeHorizontalWord]
     | otherwise = Left "Tile not placed near other tiles!"
     where maybeVerticalWord   = getWordFromTilePlacement board Vertical   tilePlacement
           maybeHorizontalWord = getWordFromTilePlacement board Horizontal tilePlacement
 
-getWords' dictionary board tilePlacements =
+getPotentialWords dictionary board tilePlacements =
     case orientation $ position <$> tilePlacements of
       Just orientation ->
         let perpWords = catMaybes $ map getPerpWord tilePlacements
@@ -92,9 +91,9 @@ checkIsFirstPlay words board
 
 getWords :: Dictionary -> Board -> [TilePlacement] -> Either String [Word]
 getWords dictionary board tilePlacements = do
-    words <- getWords' dictionary board tilePlacements
-    unless (any containsLetterFromBoard words) $ checkIsFirstPlay words board
-    return words
+    potentialWords <- getPotentialWords dictionary board tilePlacements
+    unless (any containsLetterFromBoard potentialWords) $ checkIsFirstPlay potentialWords board
+    return potentialWords
 
 getLetters :: Board -> TilePlacement -> Orientation -> Direction -> [Letter]
 getLetters board tilePlacement orientation direction = 

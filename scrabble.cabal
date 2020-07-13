@@ -22,6 +22,8 @@ common shared-properties
       base >=4.7 && <5
     , containers
     , mtl
+    , random
+    , MonadRandom
 
 library
   import: shared-properties

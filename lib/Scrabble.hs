@@ -13,7 +13,12 @@ import Tile
 import TilePlacement
 import ScrabbleT
 
+import System.Random (getStdGen)
+
 type ScrabbleIO a = ScrabbleT IO a
 
 playScrabbleIO :: ScrabbleIO () -> [String] -> IO ()
-playScrabbleIO game = playScrabbleT game putStrLn
+playScrabbleIO game =
+    \dictionary -> do
+        generator <- getStdGen
+        playScrabbleT generator game putStrLn dictionary
