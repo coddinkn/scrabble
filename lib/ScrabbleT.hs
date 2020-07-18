@@ -1,4 +1,4 @@
-module ScrabbleT 
+module ScrabbleT
 ( ScrabbleT
 , playScrabbleT
 , addPlayer
@@ -11,15 +11,14 @@ module ScrabbleT
 , whosTurn
 ) where
 
-import Board
-import GameState (GameState, Username, modifyBoard, modifyPlayer)
-import qualified GameState as GS
-import Player (Player)
-import qualified Player as P
-import Tile
-import TilePlacement
-import Score
-import Word
+import Scrabble.Board
+import Scrabble.GameState (GameState, Username, modifyBoard, modifyPlayer)
+import qualified Scrabble.GameState as GS
+import Scrabble.Player
+import Scrabble.Tile
+import Scrabble.TilePlacement
+import Scrabble.Score
+import Scrabble.Word
 
 import Control.Monad.Trans
 import Control.Monad.State
@@ -124,14 +123,14 @@ giveTiles n = do
 
 getScore :: Monad m => Username -> ScrabbleT m Int
 getScore username = do
-    maybeScore <- gets $ GS.getFromPlayer username P.playerScore
+    maybeScore <- gets $ GS.getFromPlayer username playerScore
     case maybeScore of
         Just score -> return score
         Nothing -> throwError $ "Player " ++ username ++ " not found"
 
 changeScore :: Monad m => Username -> (Int -> Int) -> ScrabbleT m Int
 changeScore username change = do
-    modify $ modifyPlayer username $ P.changePlayerScore change
+    modify $ modifyPlayer username $ changePlayerScore change
     getScore username
 
 addPlayer :: Monad m => Username -> ScrabbleT m ()
@@ -158,9 +157,9 @@ placeTiles tilePlacements = do
     username <- whosTurn
     board <- getBoard
     dictionary <- ask
-    inPlayerTiles <- fmap fromJust . gets $ GS.getFromPlayer username (P.inPlayerTiles tiles)
+    inPlayerTiles <- fmap fromJust . gets $ GS.getFromPlayer username (inPlayerTiles tiles)
     unless inPlayerTiles $ do
-        playerTiles <- gets $ GS.getFromPlayer username P.tiles
+        playerTiles <- gets $ GS.getFromPlayer username playerTiles
         throwError $ wrongTilesError playerTiles
     words <- liftEither $ getWords dictionary board tilePlacements
     mapM_ placeTile tilePlacements
@@ -175,10 +174,10 @@ placeTiles tilePlacements = do
 pass :: Monad m => ScrabbleT m ()
 pass = do
     username <- whosTurn
-    passedLastTurn <- fmap fromJust . gets $ GS.getFromPlayer username P.passedLastTurn
+    passedLastTurn <- fmap fromJust . gets $ GS.getFromPlayer username passedLastTurn
     if passedLastTurn
         then modify GS.endGame
-        else modify $ GS.modifyPlayer username P.markPass
+        else modify $ GS.modifyPlayer username markPass
 
 exchange :: Monad m => Maybe Tile -> ScrabbleT m ()
 exchange maybeTile = do

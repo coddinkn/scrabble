@@ -1,16 +1,13 @@
 module Scrabble
-( module Scrabble
-, module ScrabbleT
-, module Player
-, module Tile
-, module TilePlacement
-, module Board
+( module ScrabbleT
+, ScrabbleIO
+, playScrabbleIO
 ) where
 
-import Board
-import Player
-import Tile
-import TilePlacement
+import Scrabble.Board
+import Scrabble.Player
+import Scrabble.Tile
+import Scrabble.TilePlacement
 import ScrabbleT
 
 import System.Random (getStdGen)

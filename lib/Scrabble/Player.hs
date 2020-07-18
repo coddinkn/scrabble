@@ -1,10 +1,10 @@
-module Player where
+module Scrabble.Player where
 
-import Tile
+import Scrabble.Tile
 
 import Data.List (sort, isSubsequenceOf)
 
-data Player = Player { tiles          :: [Tile]
+data Player = Player { playerTiles    :: [Tile]
                      , playerScore    :: Int
                      , passedLastTurn :: Bool
                      }
@@ -17,14 +17,14 @@ changePlayerScore modify player = player { playerScore = modify oldScore }
     where oldScore = playerScore player
 
 givePlayerTiles :: [Tile] -> Player -> Player
-givePlayerTiles newTiles player = player { tiles = newTiles ++ oldTiles}
-    where oldTiles = tiles player
+givePlayerTiles newTiles player = player { playerTiles = newTiles ++ oldTiles}
+    where oldTiles = playerTiles player
 
 markPass :: Player -> Player
 markPass player = player { passedLastTurn = True }
 
 inPlayerTiles :: [Tile] -> Player -> Bool
 inPlayerTiles otherTiles player =
-    let playerTilesSorted = sort $ tiles player
+    let playerTilesSorted = sort $ playerTiles player
         otherTilesSorted = sort otherTiles
     in otherTilesSorted `isSubsequenceOf` playerTilesSorted

@@ -1,9 +1,9 @@
-module Modifier
+module Scrabble.Modifier
 ( Modifier (..)
 , modifier
 ) where
 
-import Position
+import Scrabble.Position
 
 data Modifier = DoubleLetter
               | TripleLetter

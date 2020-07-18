@@ -1,4 +1,4 @@
-module Position
+module Scrabble.Position
 ( Position
 , Orientation (..)
 , orientation

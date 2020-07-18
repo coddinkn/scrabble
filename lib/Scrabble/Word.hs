@@ -1,14 +1,14 @@
-module Word 
+module Scrabble.Word 
 ( Word
 , Dictionary
 , getWords
 ) where
 
-import Board
-import Position
-import Tile
-import TilePlacement
-import Score
+import Scrabble.Board
+import Scrabble.Position
+import Scrabble.Tile
+import Scrabble.TilePlacement
+import Scrabble.Score
 
 import Control.Monad (unless)
 import Data.Either (isLeft, rights)

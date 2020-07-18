@@ -1,42 +1,32 @@
-import Scrabble
+module Main where
 
-import Control.Monad.Trans
+import Scrabble.GameState
 
-scrabble :: ScrabbleIO ()
-scrabble = do
-    addPlayer "dmr"
-    addPlayer "knc"
-    readyWithTiles "knc" $ map Tile "BATCATSBATCATS"
-    readyWithTiles "dmr" $ map Tile "BATCATSBATCATS"
-    getBoard >>= liftIO . print
-    placeTiles [ flip TilePlacement (7, 6) $ Tile 'B'
-               , flip TilePlacement (7, 7) $ Tile 'A'
-               , flip TilePlacement (7, 8) $ Tile 'T'
-               ] >>= liftIO . print
-    getBoard >>= liftIO . print
-    placeTiles [ flip TilePlacement (6, 5) $ Tile 'A'
-               , flip TilePlacement (6, 6) $ Tile 'B'
-               ] >>= liftIO . print
-    getBoard >>= liftIO . print
-    placeTiles [ flip TilePlacement (6, 7) $ Tile 'C'
-               , flip TilePlacement (8, 7) $ Tile 'T'
-               ] >>= liftIO . print
-    getBoard >>= liftIO . print
-    placeTiles [ flip TilePlacement (9, 7) $ Tile 'S' ] >>= liftIO . print
-    getBoard >>= liftIO . print
-    placeTiles [ flip TilePlacement (7, 9) $ Tile 'S' ] >>= liftIO . print
-    getBoard >>= liftIO . print
-    getScore "dmr" >>= liftIO . print
-    getScore "knc" >>= liftIO . print
+import Control.Monad (void)
+import qualified Graphics.Vty as V
+
+import qualified Brick.Types as T
+import Brick.Types (Widget)
+import qualified Brick.Main as M
+import qualified Brick.Widgets.Border as B
+import qualified Brick.Widgets.Center as C
+import Brick.Widgets.Core (str)
+import Brick.AttrMap (attrMap)
+
+draw :: GameState -> [Widget ()]
+draw _ = pure . C.centerLayer . B.border $ str "Scrabble?"
+
+appEvent :: GameState -> T.BrickEvent () e -> T.EventM () (T.Next GameState)
+appEvent state _ = M.halt state
+
+app :: M.App GameState e ()
+app =
+    M.App { M.appDraw = draw
+          , M.appStartEvent = return
+          , M.appHandleEvent = appEvent
+          , M.appAttrMap = const $ attrMap V.defAttr []
+          , M.appChooseCursor = M.neverShowCursor
+          }
 
 main :: IO ()
-main =
-    let words = [ "BAT"
-                , "CAT"
-                , "CATS"
-                , "BATS"
-                , "AB"
-                , "BB"
-                , "ABC"
-                ]
-    in playScrabbleIO scrabble words
+main = void . M.defaultMain app $ newGame 

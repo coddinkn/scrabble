@@ -1,8 +1,8 @@
-module Tile
+module Scrabble.Tile
 ( Tile (..)
 ) where
 
-import Score
+import Scrabble.Score
 
 newtype Tile = Tile Char
     deriving (Eq, Ord)

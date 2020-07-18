@@ -28,17 +28,17 @@ common shared-properties
 library
   import: shared-properties
   exposed-modules: Scrabble
+                 , Scrabble.Board
+                 , Scrabble.Player
+                 , Scrabble.Position
+                 , Scrabble.Tile
+                 , Scrabble.TilePlacement
+                 , Scrabble.GameState
   other-modules: Paths_scrabble
-               , Board
-               , Player
-               , Position
-               , Modifier
-               , Score
-               , Tile
-               , TilePlacement
-               , GameState
                , ScrabbleT
-               , Word
+               , Scrabble.Modifier
+               , Scrabble.Score
+               , Scrabble.Word
   hs-source-dirs:
       lib
 
@@ -49,6 +49,10 @@ executable scrabble
   ghc-options: -threaded -rtsopts -with-rtsopts=-N
   build-depends:
       scrabble
+    , brick
+    , vty
+    , microlens
+    , microlens-th
 
 test-suite spec
   import: shared-properties

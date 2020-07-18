@@ -1,4 +1,4 @@
-module GameState
+module Scrabble.GameState
 ( Username
 , GameState (..)
 , modifyBoard
@@ -17,9 +17,9 @@ module GameState
 , endGame
 ) where
 
-import Tile
-import Board
-import Player hiding (tiles)
+import Scrabble.Tile
+import Scrabble.Board
+import Scrabble.Player
 
 import Data.List
 import Data.Maybe (fromJust)
@@ -103,7 +103,7 @@ giveUserTiles :: Int -> Username -> GameState -> GameState
 giveUserTiles n username gameState =
     case gameState of
         InProgress {} ->
-            modifyPlayer username (Player.givePlayerTiles tilesToGive) $ gameState { tiles = newTiles }
+            modifyPlayer username (givePlayerTiles tilesToGive) $ gameState { tiles = newTiles }
             where tilesToGive = take n $ tiles gameState
                   newTiles = drop n $ tiles gameState
         _ -> gameState

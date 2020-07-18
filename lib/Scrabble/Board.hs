@@ -1,4 +1,4 @@
-module Board
+module Scrabble.Board
 ( Position
 , Board
 , emptyBoard
@@ -8,10 +8,10 @@ module Board
 , boardMax
 ) where
 
-import Modifier
-import Position
-import Tile
-import TilePlacement
+import Scrabble.Modifier
+import Scrabble.Position
+import Scrabble.Tile
+import Scrabble.TilePlacement
 
 import Prelude hiding (lookup)
 import Data.Map hiding (map)

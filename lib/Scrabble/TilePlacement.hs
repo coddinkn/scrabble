@@ -1,12 +1,12 @@
-module TilePlacement
+module Scrabble.TilePlacement
 ( TilePlacement (..)
 , lineUp
 ) where
 
-import Modifier
-import Position
-import Score
-import Tile
+import Scrabble.Modifier
+import Scrabble.Position
+import Scrabble.Score
+import Scrabble.Tile
 
 data TilePlacement = TilePlacement { tile :: Tile
                                    , position :: Position

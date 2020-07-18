@@ -1,4 +1,4 @@
-module Score
+module Scrabble.Score
 ( Score (..)
 , Scorable (..)
 , compute
