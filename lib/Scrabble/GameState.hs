@@ -8,12 +8,14 @@ module Scrabble.GameState
 , getStatus
 , addUser
 , readyUser
+, readyUserWithTiles -- shenanigans
 , checkUsername
 , nextTurn
 , changeUsername
 , giveUserTiles
 , getFromPlayer
 , startGame
+, startGameWithTiles -- shenanigan
 , endGame
 ) where
 
@@ -21,9 +23,11 @@ import Scrabble.Tile
 import Scrabble.Board
 import Scrabble.Player
 
+import Control.Monad.Random
 import Data.List
 import Data.Maybe (fromJust)
 import qualified Data.Map.Strict as Map
+import System.Random
 
 type Username = String
 
@@ -34,6 +38,7 @@ data GameStatus = WaitingToStart
 
 data GameState = Waiting { users      :: [Username]
                          , readyUsers :: [Username]
+                         , gen        :: StdGen
                          }
 
                | InProgress { players   :: Map.Map Username Player
@@ -54,16 +59,72 @@ getStatus gameState =
          InProgress {} -> Started
          Over       {} -> Ended
 
-newGame :: GameState
+shuffle :: [a] -> Rand StdGen [a]
+shuffle x =
+    if length x < 2
+    then return x
+    else do
+        i <- getRandomR (0, length x - 1)
+        r <- shuffle $ take i x ++ drop (i + 1) x
+        return $ x !! i : r
+
+getStartTiles :: Rand StdGen [Tile]
+getStartTiles = do
+    let regularTiles =
+            concat $ map (map Tile . uncurry replicate)
+                [ (9, 'A')
+                , (2, 'B')
+                , (2, 'C')
+                , (4, 'D')
+                , (12,'E')
+                , (2, 'F')
+                , (3, 'G')
+                , (2, 'H')
+                , (9, 'I')
+                , (1, 'J')
+                , (1, 'K')
+                , (4, 'L')
+                , (2, 'M')
+                , (6, 'N')
+                , (8, 'O')
+                , (2, 'P')
+                , (1, 'Q')
+                , (6, 'R')
+                , (4, 'S')
+                , (6, 'T')
+                , (4, 'U')
+                , (2, 'V')
+                , (2, 'W')
+                , (1, 'X')
+                , (2, 'Y')
+                , (1, 'Z') ]
+    first  <- Tile <$> getRandomR ('A', 'Z')
+    second <- Tile <$> getRandomR ('A', 'Z')
+    shuffle $ regularTiles ++ [first, second]
+
+newGame :: StdGen -> GameState
 newGame = Waiting [] []
 
-startGame :: [Tile] -> GameState -> GameState
-startGame randomTiles gameState =
+startGame :: GameState -> GameState
+startGame gameState =
     case gameState of
-        Waiting users readyUsers ->
+        Waiting users readyUsers generator ->
             InProgress { players = Map.fromList $ zip users $ repeat newPlayer
                        , board = emptyBoard
-                       , tiles = randomTiles
+                       , tiles = evalRand getStartTiles generator
+                       , turnOrder = readyUsers
+                       , whosTurn = head readyUsers
+                       }
+        _ -> gameState
+
+-- shenanigans
+startGameWithTiles :: [Tile] -> GameState -> GameState
+startGameWithTiles startTiles gameState =
+    case gameState of
+        Waiting users readyUsers generator ->
+            InProgress { players = Map.fromList $ zip users $ repeat newPlayer
+                       , board = emptyBoard
+                       , tiles = startTiles
                        , turnOrder = readyUsers
                        , whosTurn = head readyUsers
                        }
@@ -77,23 +138,37 @@ endGame gameState =
                               }
         _ -> gameState
 
-readyUser :: [Tile] -> Username -> GameState -> GameState
-readyUser randomTiles username gameState =
+-- shenanigans
+readyUserWithTiles :: [Tile] -> Username -> GameState -> GameState
+readyUserWithTiles tiles username gameState =
     case gameState of
-        Waiting users alreadyReady ->
+        Waiting users alreadyReady _ ->
             if username `elem` alreadyReady
             then gameState
             else let newReadyUsers = username:alreadyReady
                      newGameState = gameState { readyUsers = newReadyUsers }
                  in if (sort newReadyUsers) == (sort users)
-                    then startGame randomTiles newGameState
+                    then startGameWithTiles tiles newGameState
+                    else newGameState
+        _ -> gameState
+
+readyUser :: Username -> GameState -> GameState
+readyUser username gameState =
+    case gameState of
+        Waiting users alreadyReady _ ->
+            if username `elem` alreadyReady
+            then gameState
+            else let newReadyUsers = username:alreadyReady
+                     newGameState = gameState { readyUsers = newReadyUsers }
+                 in if (sort newReadyUsers) == (sort users)
+                    then startGame newGameState
                     else newGameState
         _ -> gameState
 
 addUser :: Username -> GameState -> GameState
 addUser username gameState =
     case gameState of
-        Waiting existingUsers _ ->
+        Waiting existingUsers _ _ ->
             if username `elem` existingUsers
             then gameState
             else gameState { users = username:existingUsers }

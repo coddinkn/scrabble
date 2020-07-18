@@ -25,36 +25,36 @@ import Control.Monad.State
 import Control.Monad.Reader
 import Control.Monad.Except
 import Control.Monad.Random
+import Data.Bifunctor (bimap)
 import Data.List
 import Data.Maybe
 
 newtype ScrabbleT m a = ScrabbleT {
-    runScrabbleT :: RandT StdGen (ExceptT String (StateT GameState (ReaderT [String] m))) a
+    runScrabbleT :: ExceptT String (StateT GameState (ReaderT [String] m)) a
 } deriving (Functor, Applicative, Monad, 
             MonadError String, 
             MonadReader [String],
-            MonadState GameState,
-            MonadRandom)
+            MonadState GameState)
 
 instance MonadTrans ScrabbleT where
-    lift = ScrabbleT . lift . lift . lift . lift
+    lift = ScrabbleT . lift . lift . lift
 
 instance MonadIO m => MonadIO (ScrabbleT m) where
     liftIO = lift . liftIO
 
-playScrabbleT :: Monad m => StdGen -> ScrabbleT m () -> (String -> m ()) -> [String] -> m ()
-playScrabbleT generator game handler words = do
-    (result, _) <- flip runReaderT words $ flip runStateT GS.newGame . runExceptT . flip evalRandT generator $ runScrabbleT game
-    either handler
-           (const $ return ())
-           result
+playScrabbleT :: Monad m => [String] -> GameState -> ScrabbleT m () -> m (Either String GameState)
+playScrabbleT dictionary gameState scrabble = do
+    (result, newGameState) <- flip runReaderT dictionary . flip runStateT gameState . runExceptT $ runScrabbleT scrabble
+    return $ bimap id
+                   (const newGameState)
+                   result
 
 -- just for testing shenanigans
 readyWithTiles :: Monad m => Username -> [Tile] -> ScrabbleT m Bool
 readyWithTiles username startTiles = do
     playerExists <- gets $ GS.checkUsername username
     unless playerExists . throwError $ "Player " ++ username ++ " not found"
-    modify $ GS.readyUser startTiles username
+    modify $ GS.readyUserWithTiles startTiles username
     started <- (== GS.Started) <$> gets GS.getStatus
     when started $ do
         users <- gets GS.turnOrder
@@ -63,58 +63,14 @@ readyWithTiles username startTiles = do
 
 ready :: Monad m => Username -> ScrabbleT m Bool
 ready username = do
-    startTiles <- getStartTiles
     playerExists <- gets $ GS.checkUsername username
     unless playerExists . throwError $ "Player " ++ username ++ " not found"
-    modify $ GS.readyUser startTiles username
+    modify $ GS.readyUser username
     started <- (== GS.Started) <$> gets GS.getStatus
     when started $ do
         users <- gets GS.turnOrder
         mapM_ (modify . GS.giveUserTiles 7) users
     return started
-
-shuffle :: Monad m => [a] -> ScrabbleT m [a]
-shuffle x =
-    if length x < 2
-    then return x
-    else do
-        i <- getRandomR (0, length x - 1)
-        r <- shuffle $ take i x ++ drop (i + 1) x
-        return $ x !! i : r
-
-getStartTiles :: Monad m => ScrabbleT m [Tile]
-getStartTiles = do
-    let regularTiles =
-            concat $ map (map Tile . uncurry replicate)
-                [ (9, 'A')
-                , (2, 'B')
-                , (2, 'C')
-                , (4, 'D')
-                , (12,'E')
-                , (2, 'F')
-                , (3, 'G')
-                , (2, 'H')
-                , (9, 'I')
-                , (1, 'J')
-                , (1, 'K')
-                , (4, 'L')
-                , (2, 'M')
-                , (6, 'N')
-                , (8, 'O')
-                , (2, 'P')
-                , (1, 'Q')
-                , (6, 'R')
-                , (4, 'S')
-                , (6, 'T')
-                , (4, 'U')
-                , (2, 'V')
-                , (2, 'W')
-                , (1, 'X')
-                , (2, 'Y')
-                , (1, 'Z') ]
-    first  <- Tile <$> getRandomR ('A', 'Z')
-    second <- Tile <$> getRandomR ('A', 'Z')
-    shuffle $ regularTiles ++ [first, second]
 
 giveTiles :: Monad m => Int -> ScrabbleT m ()
 giveTiles n = do
