@@ -4,6 +4,7 @@ module Scrabble.Board
 , emptyBoard
 , getTile
 , putTile
+, showTile
 , boardMin
 , boardMax
 ) where
@@ -27,13 +28,22 @@ newtype Board = Board (Map Position Tile)
 tiles :: Board -> Map Position Tile
 tiles (Board tileMap) = tileMap
 
+showTile :: Board -> Position -> String
+showTile board position =
+    let maybeTile = getTile board position
+        noTile = maybe " " show $ modifier position
+        (column, row) = position
+    in maybe noTile show maybeTile
+
 showPosition :: Board -> Position -> String
-showPosition board position = let maybeTile = getTile board position
-                                  noTile = maybe " " show $ modifier position
-                                  (column, row) = position
-                              in maybe noTile show maybeTile ++ if row == boardMax && column /= boardMax
-                                                                then "\n"
-                                                                else ""
+showPosition board position =
+    let maybeTile = getTile board position
+        noTile = maybe " " show $ modifier position
+        (column, row) = position
+    in maybe noTile show maybeTile
+        ++ if row == boardMax && column /= boardMax
+           then "\n"
+           else ""
 
 instance Show Board where
     show board = positions >>= showPosition board
