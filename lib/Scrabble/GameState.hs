@@ -7,6 +7,7 @@ module Scrabble.GameState
 , newGame
 , getStatus
 , addUser
+, users
 , readyUser
 , readyUserWithTiles -- shenanigans
 , checkUsername
@@ -29,6 +30,9 @@ import Data.Maybe (fromJust)
 import qualified Data.Map.Strict as Map
 import System.Random
 
+import Lens.Micro ((^.), (.~), (&))
+import Lens.Micro.TH
+
 type Username = String
 
 data GameStatus = WaitingToStart
@@ -36,9 +40,9 @@ data GameStatus = WaitingToStart
                 | Ended
                 deriving Eq
 
-data GameState = Waiting { users      :: [Username]
-                         , readyUsers :: [Username]
-                         , gen        :: StdGen
+data GameState = Waiting { _users      :: [Username]
+                         , _readyUsers :: [Username]
+                         , _gen        :: StdGen
                          }
 
                | InProgress { players   :: Map.Map Username Player
@@ -51,6 +55,8 @@ data GameState = Waiting { users      :: [Username]
                | Over { winner :: Maybe Username
                       , scores :: Map.Map Username Int
                       }
+
+makeLenses ''GameState
 
 getStatus :: GameState -> GameStatus
 getStatus gameState =
@@ -71,7 +77,7 @@ shuffle x =
 getStartTiles :: Rand StdGen [Tile]
 getStartTiles = do
     let regularTiles =
-            concat $ map (map Tile . uncurry replicate)
+            concatMap (map Tile . uncurry replicate)
                 [ (9, 'A')
                 , (2, 'B')
                 , (2, 'C')
@@ -134,7 +140,7 @@ endGame :: GameState -> GameState
 endGame gameState =
     case gameState of
         InProgress {} -> Over { winner = Nothing
-                              , scores = fmap playerScore $ players gameState
+                              , scores = playerScore <$> players gameState
                               }
         _ -> gameState
 
@@ -146,8 +152,8 @@ readyUserWithTiles tiles username gameState =
             if username `elem` alreadyReady
             then gameState
             else let newReadyUsers = username:alreadyReady
-                     newGameState = gameState { readyUsers = newReadyUsers }
-                 in if (sort newReadyUsers) == (sort users)
+                     newGameState = gameState & readyUsers .~ newReadyUsers
+                 in if sort newReadyUsers == sort users
                     then startGameWithTiles tiles newGameState
                     else newGameState
         _ -> gameState
@@ -159,8 +165,8 @@ readyUser username gameState =
             if username `elem` alreadyReady
             then gameState
             else let newReadyUsers = username:alreadyReady
-                     newGameState = gameState { readyUsers = newReadyUsers }
-                 in if (sort newReadyUsers) == (sort users)
+                     newGameState = gameState & readyUsers .~ newReadyUsers
+                 in if sort newReadyUsers == sort users
                     then startGame newGameState
                     else newGameState
         _ -> gameState
@@ -171,7 +177,7 @@ addUser username gameState =
         Waiting existingUsers _ _ ->
             if username `elem` existingUsers
             then gameState
-            else gameState { users = username:existingUsers }
+            else gameState &  users .~ username:existingUsers
         _ -> gameState
 
 giveUserTiles :: Int -> Username -> GameState -> GameState
@@ -186,7 +192,7 @@ giveUserTiles n username gameState =
 checkUsername :: Username -> GameState -> Bool
 checkUsername username gameState =
     case gameState of
-        Waiting    {} -> username `elem` users gameState
+        Waiting    {} -> username `elem` gameState ^. users
         InProgress {} -> Map.member username $ players gameState
         Over       {} -> Map.member username $ scores gameState
 
@@ -199,7 +205,7 @@ nextTurn gameState =
     case gameState of
         InProgress {} ->
             let currentIndex = fromJust $ current `elemIndex` order
-                nextIndex = (currentIndex + 1) `mod` (length order)
+                nextIndex = (currentIndex + 1) `mod` length order
                 next = order !! nextIndex
             in gameState { whosTurn = next }
             where current = whosTurn gameState
@@ -220,11 +226,12 @@ changeUsername :: Username -> Username -> GameState -> GameState
 changeUsername oldUsername newUsername gameState =
     case gameState of
         Waiting {} ->
-            let usersWithout = delete oldUsername $ users gameState
-                readyWithout = delete oldUsername $ readyUsers gameState
-            in if readyWithout == readyUsers gameState
-               then gameState { users = newUsername:usersWithout }
-               else gameState { users = newUsername:usersWithout, readyUsers = newUsername:readyWithout }
+            let usersWithout = delete oldUsername $ gameState ^. users
+                readyWithout = delete oldUsername $ gameState ^. readyUsers
+            in if readyWithout == gameState ^. readyUsers
+               then gameState & users .~ newUsername:usersWithout
+               else gameState & users .~ newUsername:usersWithout
+                              & readyUsers .~ newUsername:readyWithout
         InProgress {} ->
             let playersWithout = Map.delete oldUsername $ players gameState
                 maybePlayer = Map.lookup oldUsername $ players gameState

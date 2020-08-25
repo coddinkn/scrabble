@@ -13,7 +13,7 @@ import Scrabble.Score
 import Control.Monad (unless)
 import Data.Either (isLeft, rights)
 import Data.List (sortBy, find)
-import Data.Maybe (fromJust, isJust, catMaybes)
+import Data.Maybe (fromJust, isJust, mapMaybe)
 import Prelude hiding (Word)
 
 newtype Letter = Letter (Either Tile TilePlacement)
@@ -69,7 +69,7 @@ getPotentialWords dictionary board [tilePlacement]
 getPotentialWords dictionary board tilePlacements =
     case orientation $ position <$> tilePlacements of
       Just orientation ->
-        let perpWords = catMaybes $ map getPerpWord tilePlacements
+        let perpWords = mapMaybe getPerpWord tilePlacements
         in do word <- getWordFromTilePlacements dictionary board orientation tilePlacements
               let words = word:perpWords
               mapM (checkWord dictionary) words
@@ -107,7 +107,7 @@ getLetters board tilePlacement orientation direction =
                 Before -> ([boardMin .. (limit - 1)], reverse)
                 After  -> ([(limit + 1) .. boardMax], id)
     in adjust . letters . adjust $ map makePosition range
-    where letters = map tileToLetter . map fromJust . takeWhile isJust . map (getTile board)
+    where letters = map (tileToLetter . fromJust) . takeWhile isJust . map (getTile board)
 
 getWordFromTilePlacement :: Board -> Orientation -> TilePlacement -> Maybe Word
 getWordFromTilePlacement board orientation tilePlacement =

@@ -25,7 +25,7 @@ import Control.Monad.State
 import Control.Monad.Reader
 import Control.Monad.Except
 import Control.Monad.Random
-import Data.Bifunctor (bimap)
+import Data.Bifunctor (second)
 import Data.List
 import Data.Maybe
 
@@ -45,9 +45,7 @@ instance MonadIO m => MonadIO (ScrabbleT m) where
 playScrabbleT :: Monad m => [String] -> GameState -> ScrabbleT m () -> m (Either String GameState)
 playScrabbleT dictionary gameState scrabble = do
     (result, newGameState) <- flip runReaderT dictionary . flip runStateT gameState . runExceptT $ runScrabbleT scrabble
-    return $ bimap id
-                   (const newGameState)
-                   result
+    return $ second (const newGameState) result
 
 -- just for testing shenanigans
 readyWithTiles :: Monad m => Username -> [Tile] -> ScrabbleT m Bool
@@ -90,7 +88,10 @@ changeScore username change = do
     getScore username
 
 addPlayer :: Monad m => Username -> ScrabbleT m ()
-addPlayer username = modify $ GS.addUser username
+addPlayer username = do
+    playerExists <- gets $ GS.checkUsername username
+    when playerExists . throwError $ "Player " ++ username ++ " already exists"
+    modify $ GS.addUser username
 
 changeUsername :: Monad m => Username -> Username -> ScrabbleT m ()
 changeUsername oldUsername newUsername = do
@@ -106,7 +107,7 @@ whosTurn = do
     status <- gets GS.getStatus
     case status of
         GS.Started -> gets GS.whosTurn
-        _ -> throwError $ "The game has not started"
+        _ -> throwError "The game has not started"
 
 placeTiles :: Monad m => [TilePlacement] -> ScrabbleT m Int
 placeTiles tilePlacements = do
