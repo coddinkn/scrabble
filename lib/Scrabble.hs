@@ -6,11 +6,7 @@ module Scrabble
 , playScrabbleIO
 ) where
 
-import Scrabble.Board
-import Scrabble.Player
 import Scrabble.GameState
-import Scrabble.Tile
-import Scrabble.TilePlacement
 import ScrabbleT
 
 import Control.Monad.Identity

@@ -16,8 +16,6 @@ import Scrabble.TilePlacement
 
 import Prelude hiding (lookup)
 import Data.Map hiding (map)
-import Data.List (find)
-import Data.Maybe
 
 boardMax = 14
 boardMin = 0
@@ -32,7 +30,6 @@ showTile :: Board -> Position -> String
 showTile board position =
     let maybeTile = getTile board position
         noTile = maybe " " show $ modifier position
-        (column, row) = position
     in maybe noTile show maybeTile
 
 showPosition :: Board -> Position -> String

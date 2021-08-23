@@ -29,11 +29,11 @@ drawBoard theBoard =
 
 drawGameState :: GameState -> Widget ()
 drawGameState gameState =
-    case getStatus gameState of
-        WaitingToStart -> let u = gameState ^. users
-                          in  B.border . vBox . map str $ u ++ pure "add player"
-        Started -> drawBoard $ board gameState
-        Ended -> undefined
+    case gameState of
+        Waiting state -> let u = state ^. users
+                         in  B.border . vBox . map str $ u ++ pure "add player"
+        InProgress state -> drawBoard $ getBoard state
+        Over _ -> undefined
 
 drawUI :: GameState -> [Widget ()]
 drawUI = pure . C.centerLayer . drawGameState 

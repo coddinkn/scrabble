@@ -26,6 +26,7 @@ common shared-properties
     , mtl
     , random
     , MonadRandom
+    , cursor
     , microlens
     , microlens-th
 

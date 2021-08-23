@@ -57,9 +57,9 @@ checkWord dictionary word = do
 
 getPotentialWords :: Dictionary -> Board -> [TilePlacement] -> Either String [Word]
 
-getPotentialWords dictionary board [] = Left "No tiles placed"
+getPotentialWords _ _ [] = Left "No tiles placed"
 
-getPotentialWords dictionary board [tilePlacement]
+getPotentialWords _ board [tilePlacement]
     | isJust maybeVerticalWord   = Right [fromJust maybeVerticalWord]
     | isJust maybeHorizontalWord = Right [fromJust maybeHorizontalWord]
     | otherwise = Left "Tile not placed near other tiles!"
@@ -70,7 +70,7 @@ getPotentialWords dictionary board tilePlacements =
     case orientation $ position <$> tilePlacements of
       Just orientation ->
         let perpWords = mapMaybe getPerpWord tilePlacements
-        in do word <- getWordFromTilePlacements dictionary board orientation tilePlacements
+        in do word <- getWordFromTilePlacements board orientation tilePlacements
               let words = word:perpWords
               mapM (checkWord dictionary) words
         where getPerpWord = getWordFromTilePlacement board $ opposite orientation
@@ -157,8 +157,8 @@ getLettersBetween board tilePlacements orientation =
     in mapM getLetter betweenPositions
     where getLetter = getLetterBetween board tilePlacements
 
-getWordFromTilePlacements :: Dictionary -> Board -> Orientation -> [TilePlacement] -> Either String Word
-getWordFromTilePlacements dictionary board orientation tilePlacements =
+getWordFromTilePlacements :: Board -> Orientation -> [TilePlacement] -> Either String Word
+getWordFromTilePlacements board orientation tilePlacements =
     let before = getLetters board (head sorted) orientation Before
         after  = getLetters board (last sorted) orientation After
     in do between <- getLettersBetween board sorted orientation

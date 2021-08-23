@@ -48,12 +48,13 @@ scrabble = do
 
 appEvent :: GameState -> T.BrickEvent () e -> T.EventM () (T.Next GameState)
 
-appEvent state (T.VtyEvent (V.EvKey (V.KChar 'a') []))
-    | getStatus state == WaitingToStart =
-        case playScrabble dictionary state $ addPlayer "dmr" of
-            Left e -> liftIO (putStrLn e) >> M.continue state
-            Right newState -> M.continue newState
-    | otherwise = M.continue state
+appEvent (Waiting state) event =
+    case event of
+        T.VtyEvent (V.EvKey (V.KChar 'a') []) ->
+            case playScrabble dictionary (Waiting state) $ addPlayer "dmr" of
+                Left e -> liftIO (putStrLn e) >> M.continue (Waiting state)
+                Right newState -> M.continue newState
+        _ -> M.halt (Waiting state)
 
 appEvent state _ = M.halt state
 

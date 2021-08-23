@@ -24,8 +24,6 @@ import Control.Monad.Trans
 import Control.Monad.State
 import Control.Monad.Reader
 import Control.Monad.Except
-import Control.Monad.Random
-import Data.Bifunctor (second)
 import Data.List
 import Data.Maybe
 
@@ -45,35 +43,57 @@ instance MonadIO m => MonadIO (ScrabbleT m) where
 playScrabbleT :: Monad m => [String] -> GameState -> ScrabbleT m () -> m (Either String GameState)
 playScrabbleT dictionary gameState scrabble = do
     (result, newGameState) <- flip runReaderT dictionary . flip runStateT gameState . runExceptT $ runScrabbleT scrabble
-    return $ second (const newGameState) result
+    return $ const newGameState <$> result
 
 -- just for testing shenanigans
 readyWithTiles :: Monad m => Username -> [Tile] -> ScrabbleT m Bool
 readyWithTiles username startTiles = do
     playerExists <- gets $ GS.checkUsername username
     unless playerExists . throwError $ "Player " ++ username ++ " not found"
-    modify $ GS.readyUserWithTiles startTiles username
-    started <- (== GS.Started) <$> gets GS.getStatus
-    when started $ do
-        users <- gets GS.turnOrder
-        mapM_ (modify . GS.giveUserTiles 7) users
-    return started
+    gameState <- get
+    case gameState of
+        GS.Waiting state -> put $ GS.readyUserWithTiles startTiles username state
+        _ -> throwError "Cannot ready user if game has started"
+    gameState <- get
+    case gameState of
+        GS.InProgress state -> do
+            let users = GS.getUsers state
+            mapM_ (\user -> do gameState <- get
+                               case gameState of
+                                    GS.InProgress state -> put . GS.InProgress $ GS.giveUserTiles 7 user state
+                                    _ -> return ()
+                                    ) users
+            return True
+        _ -> return False
 
 ready :: Monad m => Username -> ScrabbleT m Bool
 ready username = do
     playerExists <- gets $ GS.checkUsername username
     unless playerExists . throwError $ "Player " ++ username ++ " not found"
-    modify $ GS.readyUser username
-    started <- (== GS.Started) <$> gets GS.getStatus
-    when started $ do
-        users <- gets GS.turnOrder
-        mapM_ (modify . GS.giveUserTiles 7) users
-    return started
+    gameState <- get
+    case gameState of
+        GS.Waiting state -> put $ GS.readyUser username state
+        _ -> return ()
+    gameState <- get
+    case gameState of
+        GS.InProgress state -> do
+            let users = GS.getUsers state
+            mapM_ (\user -> do gameState <- get
+                               case gameState of
+                                    GS.InProgress state -> put . GS.InProgress $ GS.giveUserTiles 7 user state
+                                    _ -> return ()
+                                    ) users
+            return True
+        _ -> return False
+
 
 giveTiles :: Monad m => Int -> ScrabbleT m ()
 giveTiles n = do
     username <- whosTurn
-    modify $ GS.giveUserTiles n username
+    gameState <- get
+    case gameState of
+        GS.InProgress state -> put . GS.InProgress $ GS.giveUserTiles n username state
+        _ -> throwError "Can't give users tiles unless the game is being played"
 
 getScore :: Monad m => Username -> ScrabbleT m Int
 getScore username = do
@@ -91,7 +111,10 @@ addPlayer :: Monad m => Username -> ScrabbleT m ()
 addPlayer username = do
     playerExists <- gets $ GS.checkUsername username
     when playerExists . throwError $ "Player " ++ username ++ " already exists"
-    modify $ GS.addUser username
+    gameState <- get
+    case gameState of
+        GS.Waiting state -> put . GS.Waiting $ GS.addUser username state
+        _ -> throwError "Can't add play after the game has started"
 
 changeUsername :: Monad m => Username -> Username -> ScrabbleT m ()
 changeUsername oldUsername newUsername = do
@@ -100,13 +123,17 @@ changeUsername oldUsername newUsername = do
     modify $ GS.changeUsername oldUsername newUsername
 
 getBoard :: Monad m => ScrabbleT m Board
-getBoard = gets GS.board
+getBoard = do
+    gameState <- get
+    case gameState of
+        GS.InProgress state -> return $ GS.getBoard state
+        _ -> throwError "The board is not ready until the game starts"
 
 whosTurn :: Monad m => ScrabbleT m Username
 whosTurn = do
-    status <- gets GS.getStatus
-    case status of
-        GS.Started -> gets GS.whosTurn
+    gameState <- get
+    case gameState of
+        GS.InProgress state -> return $ GS.whosTurn state
         _ -> throwError "The game has not started"
 
 placeTiles :: Monad m => [TilePlacement] -> ScrabbleT m Int
@@ -121,11 +148,13 @@ placeTiles tilePlacements = do
     words <- liftEither $ getWords dictionary board tilePlacements
     mapM_ placeTile tilePlacements
     let addScore = (+) $ compute . mconcat $ map score words
-    modify GS.nextTurn
+    gameState <- get
+    case gameState of
+        GS.InProgress state -> put . GS.InProgress $ GS.nextTurn state
+        _ -> return ()
     changeScore username addScore
     where tiles = sort $ map tile tilePlacements
           placeTile = modify . modifyBoard . putTile
-          positions = map position tilePlacements
           wrongTilesError playerTiles = show tiles ++ " is not a subset of " ++ show playerTiles
 
 pass :: Monad m => ScrabbleT m ()
@@ -133,7 +162,11 @@ pass = do
     username <- whosTurn
     passedLastTurn <- fmap fromJust . gets $ GS.getFromPlayer username passedLastTurn
     if passedLastTurn
-        then modify GS.endGame
+        then do
+            gameState <- get
+            case gameState of
+                 GS.InProgress state -> put . GS.Over $ GS.endGame state
+                 _ -> return ()
         else modify $ GS.modifyPlayer username markPass
 
 exchange :: Monad m => Maybe Tile -> ScrabbleT m ()

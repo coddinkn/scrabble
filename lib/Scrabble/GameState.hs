@@ -1,17 +1,18 @@
 module Scrabble.GameState
 ( Username
 , GameState (..)
+, getBoard
 , modifyBoard
 , modifyPlayer
-, GameStatus (..)
 , newGame
-, getStatus
 , addUser
 , users
+, getUsers
 , readyUser
 , readyUserWithTiles -- shenanigans
 , checkUsername
 , nextTurn
+, whosTurn
 , changeUsername
 , giveUserTiles
 , getFromPlayer
@@ -25,45 +26,41 @@ import Scrabble.Board
 import Scrabble.Player
 
 import Control.Monad.Random
+import Cursor.List.NonEmpty
 import Data.List
+import Data.List.NonEmpty (NonEmpty(..), toList)
 import Data.Maybe (fromJust)
 import qualified Data.Map.Strict as Map
-import System.Random
 
-import Lens.Micro ((^.), (.~), (&))
+import Lens.Micro ((^.), (.~), (%~), (&))
 import Lens.Micro.TH
 
 type Username = String
 
-data GameStatus = WaitingToStart
-                | Started
-                | Ended
-                deriving Eq
+data WaitingState = WaitingState { _users      :: [Username]
+                                 , _readyUsers :: [Username]
+                                 , _gen        :: StdGen
+                                 }
 
-data GameState = Waiting { _users      :: [Username]
-                         , _readyUsers :: [Username]
-                         , _gen        :: StdGen
-                         }
+makeLenses ''WaitingState
 
-               | InProgress { players   :: Map.Map Username Player
-                            , board     :: Board
-                            , tiles     :: [Tile]
-                            , turnOrder :: [Username]
-                            , whosTurn  :: Username
-                            }
+data InProgressState = InProgressState { _players    :: Map.Map Username Player
+                                       , _board      :: Board
+                                       , _tiles      :: [Tile]
+                                       , _turnCursor :: NonEmptyCursor Username Username
+                                       }
 
-               | Over { winner :: Maybe Username
-                      , scores :: Map.Map Username Int
-                      }
+makeLenses ''InProgressState
 
-makeLenses ''GameState
+data OverState = OverState { _winner :: Maybe Username
+                           , _scores :: Map.Map Username Int
+                           }
 
-getStatus :: GameState -> GameStatus
-getStatus gameState =
-    case gameState of
-         Waiting    {} -> WaitingToStart
-         InProgress {} -> Started
-         Over       {} -> Ended
+makeLenses ''OverState
+
+data GameState = Waiting    WaitingState
+               | InProgress InProgressState
+               | Over       OverState
 
 shuffle :: [a] -> Rand StdGen [a]
 shuffle x =
@@ -109,133 +106,113 @@ getStartTiles = do
     shuffle $ regularTiles ++ [first, second]
 
 newGame :: StdGen -> GameState
-newGame = Waiting [] []
+newGame = Waiting . WaitingState [] []
 
-startGame :: GameState -> GameState
-startGame gameState =
-    case gameState of
-        Waiting users readyUsers generator ->
-            InProgress { players = Map.fromList $ zip users $ repeat newPlayer
-                       , board = emptyBoard
-                       , tiles = evalRand getStartTiles generator
-                       , turnOrder = readyUsers
-                       , whosTurn = head readyUsers
-                       }
-        _ -> gameState
+startGame :: WaitingState -> InProgressState
+startGame (WaitingState users readyUsers generator) =
+    InProgressState { _players = Map.fromList . zip users $ repeat newPlayer
+                    , _board = emptyBoard
+                    , _tiles = evalRand getStartTiles generator
+                    , _turnCursor = makeNonEmptyCursor id $ head readyUsers :| tail readyUsers
+                    }
 
 -- shenanigans
-startGameWithTiles :: [Tile] -> GameState -> GameState
-startGameWithTiles startTiles gameState =
-    case gameState of
-        Waiting users readyUsers generator ->
-            InProgress { players = Map.fromList $ zip users $ repeat newPlayer
-                       , board = emptyBoard
-                       , tiles = startTiles
-                       , turnOrder = readyUsers
-                       , whosTurn = head readyUsers
-                       }
-        _ -> gameState
+startGameWithTiles :: [Tile] -> WaitingState -> InProgressState
+startGameWithTiles startTiles (WaitingState users readyUsers generator) =
+    InProgressState { _players = Map.fromList . zip users $ repeat newPlayer
+                    , _board = emptyBoard
+                    , _tiles = startTiles
+                    , _turnCursor = makeNonEmptyCursor id $ head readyUsers :| tail readyUsers
+                    }
 
-endGame :: GameState -> GameState
-endGame gameState =
-    case gameState of
-        InProgress {} -> Over { winner = Nothing
-                              , scores = playerScore <$> players gameState
-                              }
-        _ -> gameState
+endGame :: InProgressState -> OverState
+endGame state = OverState { _winner = Nothing
+                          , _scores = playerScore <$> state ^. players
+                          }
+
+allReady :: WaitingState -> Bool
+allReady state = sort (state ^. readyUsers) == sort (state ^. users)
 
 -- shenanigans
-readyUserWithTiles :: [Tile] -> Username -> GameState -> GameState
-readyUserWithTiles tiles username gameState =
-    case gameState of
-        Waiting users alreadyReady _ ->
-            if username `elem` alreadyReady
-            then gameState
-            else let newReadyUsers = username:alreadyReady
-                     newGameState = gameState & readyUsers .~ newReadyUsers
-                 in if sort newReadyUsers == sort users
-                    then startGameWithTiles tiles newGameState
-                    else newGameState
-        _ -> gameState
+readyUserWithTiles :: [Tile] -> Username -> WaitingState -> GameState
+readyUserWithTiles tiles username state
+    | username `elem` alreadyReady =
+        let newState = state & readyUsers .~ username:alreadyReady
+        in if allReady newState
+           then InProgress $ startGameWithTiles tiles newState
+           else Waiting newState
+    | otherwise = Waiting state
+    where alreadyReady = state ^. readyUsers
 
-readyUser :: Username -> GameState -> GameState
-readyUser username gameState =
-    case gameState of
-        Waiting users alreadyReady _ ->
-            if username `elem` alreadyReady
-            then gameState
-            else let newReadyUsers = username:alreadyReady
-                     newGameState = gameState & readyUsers .~ newReadyUsers
-                 in if sort newReadyUsers == sort users
-                    then startGame newGameState
-                    else newGameState
-        _ -> gameState
+readyUser :: Username -> WaitingState -> GameState
+readyUser username state
+    | username `elem` alreadyReady =
+        let newState = state & readyUsers .~ username:alreadyReady
+        in if allReady newState
+           then InProgress $ startGame newState
+           else Waiting newState
+    | otherwise = Waiting state
+    where alreadyReady = state ^. readyUsers
 
-addUser :: Username -> GameState -> GameState
-addUser username gameState =
-    case gameState of
-        Waiting existingUsers _ _ ->
-            if username `elem` existingUsers
-            then gameState
-            else gameState &  users .~ username:existingUsers
-        _ -> gameState
+addUser :: Username -> WaitingState -> WaitingState
+addUser username state =
+    if username `elem` existingUsers
+    then state
+    else state & users .~ username:existingUsers
+    where existingUsers = state ^. users
 
-giveUserTiles :: Int -> Username -> GameState -> GameState
-giveUserTiles n username gameState =
-    case gameState of
-        InProgress {} ->
-            modifyPlayer username (givePlayerTiles tilesToGive) $ gameState { tiles = newTiles }
-            where tilesToGive = take n $ tiles gameState
-                  newTiles = drop n $ tiles gameState
-        _ -> gameState
+getUsers :: InProgressState -> [Username]
+getUsers state = toList . rebuildNonEmptyCursor id $ state ^. turnCursor
+
+giveUserTiles :: Int -> Username -> InProgressState -> InProgressState
+giveUserTiles n username state =
+    let tilesToGive = take n $ state ^. tiles
+    in state & tiles %~ drop n
+             & players %~ Map.adjust (givePlayerTiles tilesToGive) username
 
 checkUsername :: Username -> GameState -> Bool
 checkUsername username gameState =
     case gameState of
-        Waiting    {} -> username `elem` gameState ^. users
-        InProgress {} -> Map.member username $ players gameState
-        Over       {} -> Map.member username $ scores gameState
+        Waiting    state -> username `elem` state ^. users
+        InProgress state -> Map.member username $ state ^. players
+        Over       state -> Map.member username $ state ^. scores
+
+getBoard :: InProgressState -> Board
+getBoard state = state ^. board
 
 modifyBoard :: (Board -> Board) -> GameState -> GameState
-modifyBoard modify gameState = gameState { board = modify currentBoard }
-    where currentBoard = board gameState
+modifyBoard modify (InProgress state) = InProgress $ state & board %~ modify
 
-nextTurn :: GameState -> GameState
-nextTurn gameState =
-    case gameState of
-        InProgress {} ->
-            let currentIndex = fromJust $ current `elemIndex` order
-                nextIndex = (currentIndex + 1) `mod` length order
-                next = order !! nextIndex
-            in gameState { whosTurn = next }
-            where current = whosTurn gameState
-                  order = turnOrder gameState
-        _ -> gameState
+stepCursor :: NonEmptyCursor a a -> NonEmptyCursor a a
+stepCursor cursor = maybe (nonEmptyCursorSelectFirst id id cursor) id $ nonEmptyCursorSelectNext id id cursor
+
+nextTurn :: InProgressState -> InProgressState
+nextTurn state = state & turnCursor %~ stepCursor
+
+whosTurn :: InProgressState -> Username
+whosTurn state = nonEmptyCursorCurrent $ state ^. turnCursor
 
 getFromPlayer :: Username -> (Player -> a) -> GameState -> Maybe a
 getFromPlayer username get gameState =
     case gameState of
-        InProgress {} -> fmap get . Map.lookup username $ players gameState
+        InProgress state -> fmap get . Map.lookup username $ state ^. players
         _ -> Nothing
 
 modifyPlayer :: Username -> (Player -> Player) -> GameState -> GameState
-modifyPlayer username modify gameState = gameState { players = Map.adjust modify username oldPlayers }
-    where oldPlayers = players gameState
+modifyPlayer username modify (InProgress state) = InProgress $ state & players %~ Map.adjust modify username
 
 changeUsername :: Username -> Username -> GameState -> GameState
 changeUsername oldUsername newUsername gameState =
     case gameState of
-        Waiting {} ->
-            let usersWithout = delete oldUsername $ gameState ^. users
-                readyWithout = delete oldUsername $ gameState ^. readyUsers
-            in if readyWithout == gameState ^. readyUsers
-               then gameState & users .~ newUsername:usersWithout
-               else gameState & users .~ newUsername:usersWithout
-                              & readyUsers .~ newUsername:readyWithout
-        InProgress {} ->
-            let playersWithout = Map.delete oldUsername $ players gameState
-                maybePlayer = Map.lookup oldUsername $ players gameState
-            in case maybePlayer of
-                Just player -> gameState { players = Map.insert newUsername player playersWithout }
+        Waiting state -> Waiting $
+            state & users %~ map updateUser
+                  & readyUsers %~ map updateUser
+        InProgress state ->
+            case Map.lookup oldUsername $ state ^. players of
+                Just player -> InProgress $
+                    state & players %~ Map.delete oldUsername
+                          & players %~ Map.insert newUsername player
+                          & turnCursor %~ mapNonEmptyCursor updateUser updateUser
                 Nothing -> gameState
         _ -> gameState
+    where updateUser username = if username == oldUsername then newUsername else username
