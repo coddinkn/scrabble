@@ -39,6 +39,7 @@ library
                  , Scrabble.Tile
                  , Scrabble.TilePlacement
                  , Scrabble.GameState
+                 , Scrabble.Exception
   other-modules: Paths_scrabble
                , ScrabbleT
                , Scrabble.Modifier

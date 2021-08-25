@@ -52,7 +52,7 @@ appEvent (Waiting state) event =
     case event of
         T.VtyEvent (V.EvKey (V.KChar 'a') []) ->
             case playScrabble dictionary (Waiting state) $ addPlayer "dmr" of
-                Left e -> liftIO (putStrLn e) >> M.continue (Waiting state)
+                Left e -> liftIO (print e) >> M.continue (Waiting state)
                 Right newState -> M.continue newState
         _ -> M.halt (Waiting state)
 

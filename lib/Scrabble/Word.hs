@@ -9,6 +9,7 @@ import Scrabble.Position
 import Scrabble.Tile
 import Scrabble.TilePlacement
 import Scrabble.Score
+import Scrabble.Exception
 
 import Control.Monad (unless)
 import Data.Either (isLeft, rights)
@@ -49,20 +50,20 @@ data Direction = Before
 
 type Dictionary = [String]
 
-checkWord :: Dictionary -> Word -> Either String Word
+checkWord :: Dictionary -> Word -> Either Exception Word
 checkWord dictionary word = do
-    unless inDictionary . Left $ show word ++ " is not in the dictionary"
+    unless inDictionary . Left . Generic $ show word ++ " is not in the dictionary"
     return word
     where inDictionary = show word `elem` dictionary
 
-getPotentialWords :: Dictionary -> Board -> [TilePlacement] -> Either String [Word]
+getPotentialWords :: Dictionary -> Board -> [TilePlacement] -> Either Exception [Word]
 
-getPotentialWords _ _ [] = Left "No tiles placed"
+getPotentialWords _ _ [] = Left $ Generic "No tiles placed"
 
 getPotentialWords _ board [tilePlacement]
     | isJust maybeVerticalWord   = Right [fromJust maybeVerticalWord]
     | isJust maybeHorizontalWord = Right [fromJust maybeHorizontalWord]
-    | otherwise = Left "Tile not placed near other tiles!"
+    | otherwise = Left $ Generic "Tile not placed near other tiles!"
     where maybeVerticalWord   = getWordFromTilePlacement board Vertical   tilePlacement
           maybeHorizontalWord = getWordFromTilePlacement board Horizontal tilePlacement
 
@@ -74,7 +75,7 @@ getPotentialWords dictionary board tilePlacements =
               let words = word:perpWords
               mapM (checkWord dictionary) words
         where getPerpWord = getWordFromTilePlacement board $ opposite orientation
-      Nothing -> Left "Tiles not placed in single row or column"
+      Nothing -> Left $ Generic "Tiles not placed in single row or column"
 
 crossesCenter :: Word -> Bool
 crossesCenter (Word letters) =
@@ -83,13 +84,13 @@ crossesCenter (Word letters) =
 containsLetterFromBoard :: Word -> Bool
 containsLetterFromBoard (Word letters) = any fromBoard letters
 
-checkIsFirstPlay :: [Word] -> Board -> Either String ()
+checkIsFirstPlay :: [Word] -> Board -> Either Exception ()
 checkIsFirstPlay words board
-    | board /= emptyBoard = Left "you must include an existing letter in your word"
-    | not $ any crossesCenter words = Left "the first word must cross through the center tile"
+    | board /= emptyBoard = Left $ Generic "you must include an existing letter in your word"
+    | not $ any crossesCenter words = Left $ Generic "the first word must cross through the center tile"
     | otherwise = return ()
 
-getWords :: Dictionary -> Board -> [TilePlacement] -> Either String [Word]
+getWords :: Dictionary -> Board -> [TilePlacement] -> Either Exception [Word]
 getWords dictionary board tilePlacements = do
     potentialWords <- getPotentialWords dictionary board tilePlacements
     unless (any containsLetterFromBoard potentialWords) $ checkIsFirstPlay potentialWords board
@@ -126,22 +127,22 @@ collisionMessage tilePlacement tile =
           posn = show $ position tilePlacement
           already = show tile
 
-getLetterBetween :: Board -> [TilePlacement] -> Position -> Either String Letter
+getLetterBetween :: Board -> [TilePlacement] -> Position -> Either Exception Letter
 getLetterBetween board tilePlacements posn =
     let maybeTilePlacement = find sameSpot tilePlacements
         maybeTile = getTile board posn
     in case maybeTilePlacement of
         Just tilePlacement ->
             case maybeTile of
-                Just tile -> Left  $ collisionMessage tilePlacement tile
+                Just tile -> Left . Generic $ collisionMessage tilePlacement tile
                 Nothing   -> Right $ tilePlacementToLetter tilePlacement
         Nothing ->
             case maybeTile of
                 Just tile -> Right $ tileToLetter tile
-                Nothing   -> Left "The tiles being placed to not bridge existing tiles"
+                Nothing   -> Left $ Generic "The tiles being placed to not bridge existing tiles"
     where sameSpot tilePlacement = position tilePlacement == posn
 
-getLettersBetween :: Board -> [TilePlacement] -> Orientation -> Either String [Letter]
+getLettersBetween :: Board -> [TilePlacement] -> Orientation -> Either Exception [Letter]
 getLettersBetween board tilePlacements orientation =
     let positions = map position tilePlacements
         (constant, selector) =
@@ -157,7 +158,7 @@ getLettersBetween board tilePlacements orientation =
     in mapM getLetter betweenPositions
     where getLetter = getLetterBetween board tilePlacements
 
-getWordFromTilePlacements :: Board -> Orientation -> [TilePlacement] -> Either String Word
+getWordFromTilePlacements :: Board -> Orientation -> [TilePlacement] -> Either Exception Word
 getWordFromTilePlacements board orientation tilePlacements =
     let before = getLetters board (head sorted) orientation Before
         after  = getLetters board (last sorted) orientation After
