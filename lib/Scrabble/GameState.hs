@@ -27,6 +27,7 @@ module Scrabble.GameState
 import Scrabble.Tile
 import Scrabble.Board
 import Scrabble.Player
+import Scrabble.Exception
 
 import Control.Monad.Random
 import Cursor.List.NonEmpty
@@ -183,8 +184,8 @@ checkUsername username gameState =
 getBoard :: InProgressState -> Board
 getBoard state = state ^. board
 
-modifyBoard :: (Board -> Board) -> GameState -> GameState
-modifyBoard modify (InProgress state) = InProgress $ state & board %~ modify
+modifyBoard :: (Board -> Board) -> InProgressState -> InProgressState
+modifyBoard modify state = state & board %~ modify
 
 stepCursor :: NonEmptyCursor a a -> NonEmptyCursor a a
 stepCursor cursor = maybe (nonEmptyCursorSelectFirst id id cursor) id $ nonEmptyCursorSelectNext id id cursor
@@ -195,27 +196,37 @@ nextTurn state = state & turnCursor %~ stepCursor
 whosTurn :: InProgressState -> Username
 whosTurn state = nonEmptyCursorCurrent $ state ^. turnCursor
 
-getFromPlayer :: Username -> (Player -> a) -> GameState -> Maybe a
-getFromPlayer username get gameState =
-    case gameState of
-        InProgress state -> fmap get . Map.lookup username $ state ^. players
-        _ -> Nothing
+getFromPlayer :: Username -> (Player -> a) -> InProgressState -> Either Exception a
+getFromPlayer username get state =
+    let maybePlayer = Map.lookup username $ state ^. players
+    in case maybePlayer of
+        Just p  -> return $ get p
+        Nothing -> Left $ UnknownUser username
 
-modifyPlayer :: Username -> (Player -> Player) -> GameState -> GameState
-modifyPlayer username modify (InProgress state) = InProgress $ state & players %~ Map.adjust modify username
 
-changeUsername :: Username -> Username -> GameState -> GameState
+modifyPlayer :: Username -> (Player -> Player) -> InProgressState -> InProgressState
+modifyPlayer username modify state = state & players %~ Map.adjust modify username
+
+changeUsername :: Username -> Username -> GameState -> Either Exception GameState
 changeUsername oldUsername newUsername gameState =
-    case gameState of
-        Waiting state -> Waiting $
+    if checkUsername oldUsername gameState
+    then case gameState of
+        Waiting state -> return . Waiting $
             state & users %~ map updateUser
                   & readyUsers %~ map updateUser
         InProgress state ->
             case Map.lookup oldUsername $ state ^. players of
-                Just player -> InProgress $
+                Just player -> return . InProgress $
                     state & players %~ Map.delete oldUsername
                           & players %~ Map.insert newUsername player
                           & turnCursor %~ mapNonEmptyCursor updateUser updateUser
-                Nothing -> gameState
-        _ -> gameState
+                Nothing -> Left $ UnknownUser oldUsername
+        Over state ->
+            case Map.lookup oldUsername $ state ^. scores of
+                Just score -> return . Over $
+                    state & scores %~ Map.delete oldUsername
+                          & scores %~ Map.insert newUsername score
+                          & winner %~ fmap updateUser
+                Nothing -> Left $ UnknownUser oldUsername
+    else Left $ UnknownUser oldUsername
     where updateUser username = if username == oldUsername then newUsername else username

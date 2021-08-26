@@ -61,6 +61,9 @@ getFromInProgress f = do gameState <- get
                              GS.InProgress state -> return $ f state
                              _ -> throwError $ IncorrectState "Must be in progress"
 
+getFromPlayer :: Monad m => Username -> (Player -> a) -> ScrabbleT m a
+getFromPlayer username f = (getFromInProgress $ GS.getFromPlayer username f) >>= liftEither
+
 modifyInProgress :: Monad m => (InProgressState -> GameState) -> ScrabbleT m ()
 modifyInProgress f = getFromInProgress f >>= put
 
@@ -108,28 +111,24 @@ giveTiles n = do
     modifyInProgress $ GS.InProgress . GS.giveUserTiles n username
 
 getScore :: Monad m => Username -> ScrabbleT m Int
-getScore username = do
-    maybeScore <- gets $ GS.getFromPlayer username playerScore
-    case maybeScore of
-        Just score -> return score
-        Nothing -> throwError . Generic $ "Player " ++ username ++ " not found"
+getScore = flip getFromPlayer playerScore
 
 changeScore :: Monad m => Username -> (Int -> Int) -> ScrabbleT m Int
 changeScore username change = do
-    modify $ modifyPlayer username $ changePlayerScore change
+    modifyInProgress $ GS.InProgress . GS.modifyPlayer username (changePlayerScore change)
     getScore username
 
 addPlayer :: Monad m => Username -> ScrabbleT m ()
 addPlayer username = do
     playerExists <- gets $ GS.checkUsername username
-    when playerExists . throwError . Generic $ "Player " ++ username ++ " already exists"
+    when playerExists . throwError $ UsernameTaken username
     modifyWaiting $ GS.Waiting . GS.addUser username
 
 changeUsername :: Monad m => Username -> Username -> ScrabbleT m ()
 changeUsername oldUsername newUsername = do
     playerExists <- gets $ GS.checkUsername oldUsername
-    unless playerExists . throwError . Generic $ "Player " ++ oldUsername ++ " not found"
-    modify $ GS.changeUsername oldUsername newUsername
+    unless playerExists . throwError $ UnknownUser oldUsername
+    get >>= liftEither . GS.changeUsername oldUsername newUsername >>= put
 
 getBoard :: Monad m => ScrabbleT m Board
 getBoard = getFromInProgress GS.getBoard
@@ -142,9 +141,9 @@ placeTiles tilePlacements = do
     username <- whosTurn
     board <- getBoard
     dictionary <- ask
-    inPlayerTiles <- fmap fromJust . gets $ GS.getFromPlayer username (inPlayerTiles tiles)
+    inPlayerTiles <- getFromPlayer username (inPlayerTiles tiles)
     unless inPlayerTiles $ do
-        playerTiles <- gets $ GS.getFromPlayer username playerTiles
+        playerTiles <- getFromPlayer username playerTiles
         throwError $ wrongTilesError playerTiles
     words <- liftEither $ getWords dictionary board tilePlacements
     mapM_ placeTile tilePlacements
@@ -152,16 +151,16 @@ placeTiles tilePlacements = do
     modifyInProgress $ GS.InProgress . GS.nextTurn
     changeScore username addScore
     where tiles = sort $ map tile tilePlacements
-          placeTile = modify . modifyBoard . putTile
+          placeTile tp = modifyInProgress $ GS.InProgress . modifyBoard (putTile tp)
           wrongTilesError playerTiles = Generic $ show tiles ++ " is not a subset of " ++ show playerTiles
 
 pass :: Monad m => ScrabbleT m ()
 pass = do
     username <- whosTurn
-    passedLastTurn <- fmap fromJust . gets $ GS.getFromPlayer username passedLastTurn
+    passedLastTurn <- getFromPlayer username passedLastTurn
     if passedLastTurn
         then modifyInProgress $ GS.Over . GS.endGame
-        else modify $ GS.modifyPlayer username markPass
+        else modifyInProgress $ GS.InProgress . GS.modifyPlayer username markPass
 
 exchange :: Monad m => Maybe Tile -> ScrabbleT m ()
 exchange maybeTile = do
