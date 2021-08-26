@@ -7,6 +7,6 @@ data Exception = IncorrectState String
 
 instance Show Exception where
 
-    show (IncorrectState message) = "Incorrect state for operation: " ++ message
+    show (IncorrectState message) = "Incorrect game state for operation: " ++ message
 
     show (Generic message) = message

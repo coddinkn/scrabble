@@ -1,6 +1,9 @@
 module Scrabble.GameState
 ( Username
 , GameState (..)
+, WaitingState
+, InProgressState
+, OverState
 , getBoard
 , modifyBoard
 , modifyPlayer
