@@ -41,9 +41,8 @@ import Lens.Micro.TH
 
 type Username = String
 
-data WaitingState = WaitingState { _users      :: [Username]
-                                 , _readyUsers :: [Username]
-                                 , _gen        :: StdGen
+data WaitingState = WaitingState { _users :: Map.Map Username Bool
+                                 , _gen   :: StdGen
                                  }
 
 makeLenses ''WaitingState
@@ -110,24 +109,26 @@ getStartTiles = do
     shuffle $ regularTiles ++ [first, second]
 
 newGame :: StdGen -> GameState
-newGame = Waiting . WaitingState [] []
+newGame = Waiting . WaitingState Map.empty
 
-startGame :: WaitingState -> InProgressState
-startGame (WaitingState users readyUsers generator) =
-    InProgressState { _players = Map.fromList . zip users $ repeat newPlayer
+startGame :: WaitingState -> Username -> InProgressState
+startGame state first =
+    InProgressState { _players = Map.fromList . zip userList $ repeat newPlayer
                     , _board = emptyBoard
-                    , _tiles = evalRand getStartTiles generator
-                    , _turnCursor = makeNonEmptyCursor id $ head readyUsers :| tail readyUsers
+                    , _tiles = evalRand getStartTiles $ state ^. gen
+                    , _turnCursor = makeNonEmptyCursor id $ first :| filter (/= first) userList
                     }
+    where userList = Map.keys $ state ^. users
 
 -- shenanigans
-startGameWithTiles :: [Tile] -> WaitingState -> InProgressState
-startGameWithTiles startTiles (WaitingState users readyUsers generator) =
-    InProgressState { _players = Map.fromList . zip users $ repeat newPlayer
+startGameWithTiles :: [Tile] -> WaitingState -> Username -> InProgressState
+startGameWithTiles startTiles state first =
+    InProgressState { _players = Map.fromList . zip userList $ repeat newPlayer
                     , _board = emptyBoard
                     , _tiles = startTiles
-                    , _turnCursor = makeNonEmptyCursor id $ head readyUsers :| tail readyUsers
+                    , _turnCursor = makeNonEmptyCursor id $ first :| filter (/= first) userList
                     }
+    where userList = Map.keys $ state ^. users
 
 endGame :: InProgressState -> OverState
 endGame state = OverState { _winner = Nothing
@@ -135,35 +136,28 @@ endGame state = OverState { _winner = Nothing
                           }
 
 allReady :: WaitingState -> Bool
-allReady state = sort (state ^. readyUsers) == sort (state ^. users)
+allReady state = and . Map.elems $ state ^. users
 
 -- shenanigans
 readyUserWithTiles :: [Tile] -> Username -> WaitingState -> GameState
-readyUserWithTiles tiles username state
-    | username `elem` alreadyReady =
-        let newState = state & readyUsers .~ username:alreadyReady
-        in if allReady newState
-           then InProgress $ startGameWithTiles tiles newState
-           else Waiting newState
-    | otherwise = Waiting state
-    where alreadyReady = state ^. readyUsers
+readyUserWithTiles tiles username state =
+    let newState = state & users %~ Map.update (Just . const True) username
+    in if allReady newState
+       then InProgress $ startGameWithTiles tiles newState username
+       else Waiting newState
 
 readyUser :: Username -> WaitingState -> GameState
-readyUser username state
-    | username `elem` alreadyReady =
-        let newState = state & readyUsers .~ username:alreadyReady
-        in if allReady newState
-           then InProgress $ startGame newState
-           else Waiting newState
-    | otherwise = Waiting state
-    where alreadyReady = state ^. readyUsers
+readyUser username state =
+    let newState = state & users %~ Map.update (Just . const True) username
+    in if allReady newState
+       then InProgress $ startGame newState username
+       else Waiting newState
 
 addUser :: Username -> WaitingState -> WaitingState
 addUser username state =
-    if username `elem` existingUsers
+    if Map.member username $ state ^. users
     then state
-    else state & users .~ username:existingUsers
-    where existingUsers = state ^. users
+    else state & users %~ Map.insert username False
 
 getUsers :: InProgressState -> [Username]
 getUsers state = toList . rebuildNonEmptyCursor id $ state ^. turnCursor
@@ -177,7 +171,7 @@ giveUserTiles n username state =
 checkUsername :: Username -> GameState -> Bool
 checkUsername username gameState =
     case gameState of
-        Waiting    state -> username `elem` state ^. users
+        Waiting    state -> Map.member username $ state ^. users
         InProgress state -> Map.member username $ state ^. players
         Over       state -> Map.member username $ state ^. scores
 
@@ -209,11 +203,13 @@ modifyPlayer username modify state = state & players %~ Map.adjust modify userna
 
 changeUsername :: Username -> Username -> GameState -> Either Exception GameState
 changeUsername oldUsername newUsername gameState =
-    if checkUsername oldUsername gameState
-    then case gameState of
-        Waiting state -> return . Waiting $
-            state & users %~ map updateUser
-                  & readyUsers %~ map updateUser
+    case gameState of
+        Waiting state ->
+            case Map.lookup oldUsername $ state ^. users of
+                Just ready -> return . Waiting $
+                    state & users %~ Map.delete oldUsername
+                          & users %~ Map.insert newUsername ready
+                Nothing -> Left $ UnknownUser oldUsername
         InProgress state ->
             case Map.lookup oldUsername $ state ^. players of
                 Just player -> return . InProgress $
@@ -228,5 +224,4 @@ changeUsername oldUsername newUsername gameState =
                           & scores %~ Map.insert newUsername score
                           & winner %~ fmap updateUser
                 Nothing -> Left $ UnknownUser oldUsername
-    else Left $ UnknownUser oldUsername
     where updateUser username = if username == oldUsername then newUsername else username

@@ -7,6 +7,7 @@ import Scrabble.Board
 import Scrabble.GameState
 
 import Data.List (groupBy)
+import Data.Map (keys)
 
 import Brick.Types (Widget)
 import qualified Brick.Widgets.Border as B
@@ -30,7 +31,7 @@ drawBoard theBoard =
 drawGameState :: GameState -> Widget ()
 drawGameState gameState =
     case gameState of
-        Waiting state -> let u = state ^. users
+        Waiting state -> let u = keys $ state ^. users
                          in  B.border . vBox . map str $ u ++ pure "add player"
         InProgress state -> drawBoard $ getBoard state
         Over _ -> undefined
