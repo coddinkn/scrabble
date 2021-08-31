@@ -9,6 +9,7 @@ import Scrabble.TilePlacement
 
 import Control.Monad (void)
 import Control.Monad.IO.Class (liftIO)
+import Data.List.NonEmpty (NonEmpty(..))
 import qualified Graphics.Vty as V
 import System.Random (getStdGen)
 
@@ -26,25 +27,25 @@ dictionary = [ "BAT"
              , "ABC"
              ]
 
+makeTilePlacement :: (Int, Int) -> Char -> TilePlacement
+makeTilePlacement p l = flip TilePlacement p $ Tile l
+
 scrabble :: Scrabble ()
 scrabble = do
     addPlayer "dmr"
     addPlayer "knc"
     void . readyWithTiles "knc" $ map Tile "BATCATSBATCATS"
     void . readyWithTiles "dmr" $ map Tile "BATCATSBATCATS"
-    void $ placeTiles [ flip TilePlacement (7, 6) $ Tile 'B'
-                      , flip TilePlacement (7, 7) $ Tile 'A'
-                      , flip TilePlacement (7, 8) $ Tile 'T'
+    void . placeTiles $ makeTilePlacement (7, 6) 'B' :|
+                      [ makeTilePlacement (7, 7) 'A'
+                      , makeTilePlacement (7, 8) 'T'
                       ]
-    void $ placeTiles [ flip TilePlacement (6, 5) $ Tile 'A'
-                      , flip TilePlacement (6, 6) $ Tile 'B'
-                      ]
-    void $ placeTiles [ flip TilePlacement (6, 7) $ Tile 'C'
-                      , flip TilePlacement (8, 7) $ Tile 'T'
-                      ]
-    void $ placeTiles [ flip TilePlacement (9, 7) $ Tile 'S' ]
-    void $ placeTiles [ flip TilePlacement (7, 9) $ Tile 'S' ]
-
+    void . placeTiles $ makeTilePlacement (6, 5) 'A' :|
+                      [ makeTilePlacement (6, 6) 'B' ]
+    void . placeTiles $ makeTilePlacement (6, 7) 'C' :|
+                      [ makeTilePlacement (8, 7) 'T' ]
+    void . placeTiles $ makeTilePlacement (9, 7) 'S' :| []
+    void . placeTiles $ makeTilePlacement (7, 9) 'S' :| []
 
 appEvent :: GameState -> T.BrickEvent () e -> T.EventM () (T.Next GameState)
 
@@ -79,4 +80,3 @@ main = do
     either putStrLn
            (void . M.defaultMain app)
            $ Right gameState
-           -- $ playScrabble dictionary gameState scrabble

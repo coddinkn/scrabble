@@ -2,10 +2,12 @@ module Scrabble.Exception
 ( Exception (..)
 ) where
 
-data Exception = IncorrectState String
-               | UsernameTaken String
-               | UnknownUser String
-               | Generic String
+data Exception = IncorrectState        String
+               | UsernameTaken         String
+               | UnknownUser           String
+               | InvalidWord           String
+               | ImproperTilePlacement String
+               | IncorrectTiles        String String
 
 instance Show Exception where
 
@@ -15,4 +17,8 @@ instance Show Exception where
 
     show (UnknownUser username) = "No user with username " ++ username
 
-    show (Generic message) = message
+    show (InvalidWord word) = word ++ " is not in the provided dictionary"
+
+    show (ImproperTilePlacement message) = "Improper tile placement: " ++ message
+
+    show (IncorrectTiles playedTiles playerTiles) = "Incorrect tiles: " ++ playedTiles ++ " not a subset of " ++ playerTiles

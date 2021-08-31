@@ -26,6 +26,8 @@ import Control.Monad.State
 import Control.Monad.Reader
 import Control.Monad.Except
 import Data.List
+import Data.List.NonEmpty (NonEmpty(..))
+import qualified Data.List.NonEmpty as NE
 import Data.Maybe
 
 newtype ScrabbleT m a = ScrabbleT {
@@ -80,7 +82,7 @@ modifyOver f = getFromOver f >>= put
 readyWithTiles :: Monad m => Username -> [Tile] -> ScrabbleT m Bool
 readyWithTiles username startTiles = do
     playerExists <- gets $ GS.checkUsername username
-    unless playerExists . throwError . Generic $ "Player " ++ username ++ " not found"
+    unless playerExists . throwError $ UnknownUser username
     modifyWaiting $ GS.readyUserWithTiles startTiles username
     do { users <- getFromInProgress GS.getUsers;
          mapM_ (\user -> modifyInProgress $ GS.InProgress . GS.giveUserTiles 7 user) users;
@@ -94,7 +96,7 @@ readyWithTiles username startTiles = do
 ready :: Monad m => Username -> ScrabbleT m Bool
 ready username = do
     playerExists <- gets $ GS.checkUsername username
-    unless playerExists . throwError . Generic $ "Player " ++ username ++ " not found"
+    unless playerExists . throwError $ UnknownUser username
     modifyWaiting $ GS.readyUser username
     do { users <- getFromInProgress GS.getUsers;
          mapM_ (\user -> modifyInProgress $ GS.InProgress . GS.giveUserTiles 7 user) users;
@@ -136,7 +138,7 @@ getBoard = getFromInProgress GS.getBoard
 whosTurn :: Monad m => ScrabbleT m Username
 whosTurn = getFromInProgress GS.whosTurn
 
-placeTiles :: Monad m => [TilePlacement] -> ScrabbleT m Int
+placeTiles :: Monad m => NonEmpty TilePlacement -> ScrabbleT m Int
 placeTiles tilePlacements = do
     username <- whosTurn
     board <- getBoard
@@ -150,9 +152,9 @@ placeTiles tilePlacements = do
     let addScore = (+) $ compute . mconcat $ map score words
     modifyInProgress $ GS.InProgress . GS.nextTurn
     changeScore username addScore
-    where tiles = sort $ map tile tilePlacements
+    where tiles = NE.sort $ fmap tile tilePlacements
           placeTile tp = modifyInProgress $ GS.InProgress . modifyBoard (putTile tp)
-          wrongTilesError playerTiles = Generic $ show tiles ++ " is not a subset of " ++ show playerTiles
+          wrongTilesError playerTiles = IncorrectTiles (show tiles) (show playerTiles)
 
 pass :: Monad m => ScrabbleT m ()
 pass = do

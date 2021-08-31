@@ -3,6 +3,7 @@ module Scrabble.Player where
 import Scrabble.Tile
 
 import Data.List (sort, isSubsequenceOf)
+import Data.List.NonEmpty (NonEmpty, toList)
 
 data Player = Player { playerTiles    :: [Tile]
                      , playerScore    :: Int
@@ -23,8 +24,8 @@ givePlayerTiles newTiles player = player { playerTiles = newTiles ++ oldTiles}
 markPass :: Player -> Player
 markPass player = player { passedLastTurn = True }
 
-inPlayerTiles :: [Tile] -> Player -> Bool
+inPlayerTiles :: NonEmpty Tile -> Player -> Bool
 inPlayerTiles otherTiles player =
     let playerTilesSorted = sort $ playerTiles player
-        otherTilesSorted = sort otherTiles
+        otherTilesSorted = sort $ toList otherTiles
     in otherTilesSorted `isSubsequenceOf` playerTilesSorted
