@@ -132,7 +132,7 @@ startGameWithTiles startTiles state first =
 
 endGame :: InProgressState -> OverState
 endGame state = OverState { _winner = Nothing
-                          , _scores = playerScore <$> state ^. players
+                          , _scores = (^. playerScore) <$> state ^. players
                           }
 
 allReady :: WaitingState -> Bool
@@ -166,7 +166,7 @@ giveUserTiles :: Int -> Username -> InProgressState -> InProgressState
 giveUserTiles n username state =
     let tilesToGive = take n $ state ^. tiles
     in state & tiles %~ drop n
-             & players %~ Map.adjust (givePlayerTiles tilesToGive) username
+             & players %~ Map.adjust (playerTiles %~ (++ tilesToGive)) username
 
 checkUsername :: Username -> GameState -> Bool
 checkUsername username gameState =
@@ -196,7 +196,6 @@ getFromPlayer username get state =
     in case maybePlayer of
         Just p  -> return $ get p
         Nothing -> Left $ UnknownUser username
-
 
 modifyPlayer :: Username -> (Player -> Player) -> InProgressState -> InProgressState
 modifyPlayer username modify state = state & players %~ Map.adjust modify username
