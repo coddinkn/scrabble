@@ -1,5 +1,5 @@
 module Scrabble
-( module ScrabbleT
+( module MonadScrabble
 , Scrabble
 , playScrabble
 , ScrabbleIO
@@ -9,16 +9,21 @@ module Scrabble
 import Scrabble.GameState
 import Scrabble.Exception
 import ScrabbleT
+import MonadScrabble
 
 import Control.Monad.Identity
 
-type Scrabble a = ScrabbleT Identity a
+newtype Scrabble a = Scrabble {
+    runScrabble :: ScrabbleT Identity a
+} deriving (Functor, Applicative, Monad, MonadScrabble)
 
 playScrabble :: [String] -> GameState -> Scrabble () -> Either Exception GameState
 playScrabble dictionary gameState scrabble =
-    runIdentity $ playScrabbleT dictionary gameState scrabble
+    runIdentity . playScrabbleT dictionary gameState $ runScrabble scrabble
 
-type ScrabbleIO a = ScrabbleT IO a
+newtype ScrabbleIO a = ScrabbleIO {
+    runScrabbleIO :: ScrabbleT IO a
+} deriving (Functor, Applicative, Monad, MonadScrabble)
 
 playScrabbleIO :: [String] -> GameState -> ScrabbleIO () -> IO (Either Exception GameState)
-playScrabbleIO = playScrabbleT
+playScrabbleIO dictionary gameState = playScrabbleT dictionary gameState . runScrabbleIO

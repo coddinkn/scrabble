@@ -42,6 +42,7 @@ library
                  , Scrabble.Exception
   other-modules: Paths_scrabble
                , ScrabbleT
+               , MonadScrabble
                , Scrabble.Modifier
                , Scrabble.Score
                , Scrabble.Word
