@@ -12,7 +12,6 @@ data TilePlacement = TilePlacement { tile :: Tile
                                    , position :: Position
                                    } deriving Eq
 
-
 modifierToScoreBuilder :: Modifier -> (Int -> (Int, Int))
 modifierToScoreBuilder DoubleLetter = \score -> (1, 2 * score)
 modifierToScoreBuilder TripleLetter = \score -> (1, 3 * score)

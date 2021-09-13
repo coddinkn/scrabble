@@ -9,15 +9,18 @@ import Scrabble.Position
 import Scrabble.Tile
 import Scrabble.TilePlacement
 import Scrabble.Score
+import Scrabble.Exception
 
 import Control.Monad (unless)
 import Data.Either (isLeft, rights)
 import Data.List (sortBy, find)
-import Data.Maybe (fromJust, isJust, catMaybes)
+import Data.List.NonEmpty (NonEmpty(..))
+import qualified Data.List.NonEmpty as NE
+import Data.Maybe (fromJust, isJust, mapMaybe)
+import Data.Semigroup (sconcat)
 import Prelude hiding (Word)
 
 newtype Letter = Letter (Either Tile TilePlacement)
-
 instance Scorable Letter where
     score (Letter value) = either score score value
 
@@ -36,60 +39,58 @@ tilePlacementToLetter = Letter . Right
 fromBoard :: Letter -> Bool
 fromBoard = isLeft . unLetter
 
-newtype Word = Word [Letter]
+newtype Word = Word (NonEmpty Letter)
 
 instance Scorable Word where
-    score (Word letters) = mconcat $ map score letters
+    score (Word letters) = sconcat $ fmap score letters
 
 instance Show Word where
-    show (Word letters) = letters >>= show
+    show (Word letters) = NE.toList letters >>= show
 
 data Direction = Before
                | After
 
 type Dictionary = [String]
 
-checkWord :: Dictionary -> Word -> Either String Word
+checkWord :: Dictionary -> Word -> Either Exception Word
 checkWord dictionary word = do
-    unless inDictionary . Left $ show word ++ " is not in the dictionary"
+    unless inDictionary . Left . InvalidWord $ show word
     return word
     where inDictionary = show word `elem` dictionary
 
-getPotentialWords :: Dictionary -> Board -> [TilePlacement] -> Either String [Word]
+getPotentialWords :: Dictionary -> Board -> NonEmpty TilePlacement -> Either Exception [Word]
 
-getPotentialWords dictionary board [] = Left "No tiles placed"
-
-getPotentialWords dictionary board [tilePlacement]
+getPotentialWords _ board (tilePlacement :| [])
     | isJust maybeVerticalWord   = Right [fromJust maybeVerticalWord]
     | isJust maybeHorizontalWord = Right [fromJust maybeHorizontalWord]
-    | otherwise = Left "Tile not placed near other tiles!"
+    | otherwise = Left $ ImproperTilePlacement "Tile not placed near other tiles!"
     where maybeVerticalWord   = getWordFromTilePlacement board Vertical   tilePlacement
           maybeHorizontalWord = getWordFromTilePlacement board Horizontal tilePlacement
 
 getPotentialWords dictionary board tilePlacements =
-    case orientation $ position <$> tilePlacements of
+    case orientation . NE.toList $ position <$> tilePlacements of
       Just orientation ->
-        let perpWords = catMaybes $ map getPerpWord tilePlacements
-        in do word <- getWordFromTilePlacements dictionary board orientation tilePlacements
+        let perpWords = mapMaybe getPerpWord $ NE.toList tilePlacements
+        in do word <- getWordFromTilePlacements board orientation tilePlacements
               let words = word:perpWords
               mapM (checkWord dictionary) words
         where getPerpWord = getWordFromTilePlacement board $ opposite orientation
-      Nothing -> Left "Tiles not placed in single row or column"
+      Nothing -> Left $ ImproperTilePlacement "Tiles not placed in single row or column"
 
 crossesCenter :: Word -> Bool
 crossesCenter (Word letters) =
-    elem (7, 7) . map position . rights $ map unLetter letters
+    elem (7, 7) . map position . rights . map unLetter $ NE.toList letters
 
 containsLetterFromBoard :: Word -> Bool
 containsLetterFromBoard (Word letters) = any fromBoard letters
 
-checkIsFirstPlay :: [Word] -> Board -> Either String ()
+checkIsFirstPlay :: [Word] -> Board -> Either Exception ()
 checkIsFirstPlay words board
-    | board /= emptyBoard = Left "you must include an existing letter in your word"
-    | not $ any crossesCenter words = Left "the first word must cross through the center tile"
+    | board /= emptyBoard = Left $ ImproperTilePlacement "Must include an existing letter in your word"
+    | not $ any crossesCenter words = Left $ ImproperTilePlacement "the first word must cross through the center tile"
     | otherwise = return ()
 
-getWords :: Dictionary -> Board -> [TilePlacement] -> Either String [Word]
+getWords :: Dictionary -> Board -> NonEmpty TilePlacement -> Either Exception [Word]
 getWords dictionary board tilePlacements = do
     potentialWords <- getPotentialWords dictionary board tilePlacements
     unless (any containsLetterFromBoard potentialWords) $ checkIsFirstPlay potentialWords board
@@ -107,43 +108,43 @@ getLetters board tilePlacement orientation direction =
                 Before -> ([boardMin .. (limit - 1)], reverse)
                 After  -> ([(limit + 1) .. boardMax], id)
     in adjust . letters . adjust $ map makePosition range
-    where letters = map tileToLetter . map fromJust . takeWhile isJust . map (getTile board)
+    where letters = map (tileToLetter . fromJust) . takeWhile isJust . map (getTile board)
 
 getWordFromTilePlacement :: Board -> Orientation -> TilePlacement -> Maybe Word
 getWordFromTilePlacement board orientation tilePlacement =
     let before = getLetters board tilePlacement orientation Before
         placedLetter = pure $ tilePlacementToLetter tilePlacement
         after  = getLetters board tilePlacement orientation After
-        word = Word $ before ++ placedLetter ++ after
     in if null before && null after
        then Nothing 
-       else Just word 
+       else let maybeLetters = NE.nonEmpty $ before ++ placedLetter ++ after
+            in Word <$> maybeLetters
 
-collisionMessage :: TilePlacement -> Tile -> String
-collisionMessage tilePlacement tile =
+collisionException :: TilePlacement -> Tile -> Exception
+collisionException tilePlacement tile = ImproperTilePlacement $
     placed ++ " being placed at " ++ posn ++ " where " ++ already ++ " was already placed"
     where placed = show tilePlacement
           posn = show $ position tilePlacement
           already = show tile
 
-getLetterBetween :: Board -> [TilePlacement] -> Position -> Either String Letter
+getLetterBetween :: Board -> NonEmpty TilePlacement -> Position -> Either Exception Letter
 getLetterBetween board tilePlacements posn =
     let maybeTilePlacement = find sameSpot tilePlacements
         maybeTile = getTile board posn
     in case maybeTilePlacement of
         Just tilePlacement ->
             case maybeTile of
-                Just tile -> Left  $ collisionMessage tilePlacement tile
+                Just tile -> Left $ collisionException tilePlacement tile
                 Nothing   -> Right $ tilePlacementToLetter tilePlacement
         Nothing ->
             case maybeTile of
                 Just tile -> Right $ tileToLetter tile
-                Nothing   -> Left "The tiles being placed to not bridge existing tiles"
+                Nothing   -> Left $ ImproperTilePlacement "The tiles being placed to not bridge existing tiles"
     where sameSpot tilePlacement = position tilePlacement == posn
 
-getLettersBetween :: Board -> [TilePlacement] -> Orientation -> Either String [Letter]
+getLettersBetween :: Board -> NonEmpty TilePlacement -> Orientation -> Either Exception [Letter]
 getLettersBetween board tilePlacements orientation =
-    let positions = map position tilePlacements
+    let positions = NE.toList $ fmap position tilePlacements
         (constant, selector) =
             case orientation of
                 Vertical   -> (snd $ head positions, fst)
@@ -157,10 +158,10 @@ getLettersBetween board tilePlacements orientation =
     in mapM getLetter betweenPositions
     where getLetter = getLetterBetween board tilePlacements
 
-getWordFromTilePlacements :: Dictionary -> Board -> Orientation -> [TilePlacement] -> Either String Word
-getWordFromTilePlacements dictionary board orientation tilePlacements =
-    let before = getLetters board (head sorted) orientation Before
-        after  = getLetters board (last sorted) orientation After
+getWordFromTilePlacements :: Board -> Orientation -> NonEmpty TilePlacement -> Either Exception Word
+getWordFromTilePlacements board orientation tilePlacements =
+    let before = getLetters board (NE.head sorted) orientation Before
+        after  = getLetters board (NE.last sorted) orientation After
     in do between <- getLettersBetween board sorted orientation
-          return . Word $ before ++ between ++ after
-    where sorted = sortBy (lineUp orientation) tilePlacements
+          return . Word . NE.fromList $ before ++ between ++ after
+    where sorted = NE.sortBy (lineUp orientation) tilePlacements
