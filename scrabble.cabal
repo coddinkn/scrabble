@@ -20,6 +20,7 @@ common shared-properties
   default-extensions:
       GeneralizedNewtypeDeriving
     , TemplateHaskell
+    , TupleSections
   build-depends:
       base >=4.7 && <5
     , containers

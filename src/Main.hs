@@ -77,6 +77,4 @@ app =
 main :: IO ()
 main = do
     gameState <- newGame <$> getStdGen 
-    either putStrLn
-           (void . M.defaultMain app)
-           $ Right gameState
+    (void . M.defaultMain app) gameState

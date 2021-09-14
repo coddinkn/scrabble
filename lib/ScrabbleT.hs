@@ -55,7 +55,7 @@ instance MonadIO m => MonadIO (ScrabbleT m) where
 playScrabbleT :: Monad m => [String] -> GameState -> ScrabbleT m () -> m (Either Exception GameState)
 playScrabbleT dictionary gameState scrabble = do
     (result, newGameState) <- flip runReaderT dictionary . flip runStateT gameState . runExceptT $ runScrabbleT scrabble
-    return $ const newGameState <$> result
+    return $ newGameState <$ result
 
 getFromWaiting :: Monad m => (WaitingState -> a) -> ScrabbleT m a
 getFromWaiting f = do gameState <- get
@@ -73,7 +73,7 @@ getFromInProgress f = do gameState <- get
                              _ -> throwError $ IncorrectState "Must be in progress"
 
 getFromPlayer :: Monad m => Username -> (Player -> a) -> ScrabbleT m a
-getFromPlayer username f = (getFromInProgress $ GS.getFromPlayer username f) >>= liftEither
+getFromPlayer username f = getFromInProgress (GS.getFromPlayer username f) >>= liftEither
 
 modifyInProgress :: Monad m => (InProgressState -> GameState) -> ScrabbleT m ()
 modifyInProgress f = getFromInProgress f >>= put

@@ -15,13 +15,13 @@ data TilePlacement = TilePlacement { tile :: Tile
 modifierToScoreBuilder :: Modifier -> (Int -> (Int, Int))
 modifierToScoreBuilder DoubleLetter = \score -> (1, 2 * score)
 modifierToScoreBuilder TripleLetter = \score -> (1, 3 * score)
-modifierToScoreBuilder DoubleWord   = \score -> (2, score)
-modifierToScoreBuilder TripleWord   = \score -> (3, score)
+modifierToScoreBuilder DoubleWord   = (2, )
+modifierToScoreBuilder TripleWord   = (3, )
 
 instance Scorable TilePlacement where
     score placement = 
         let scoreBuilder =
-                maybe (\score -> (1, score))
+                maybe (1, )
                       modifierToScoreBuilder
                     $ modifier $ position placement  
             (multiplier, baseScore) = scoreBuilder . compute . score $ tile placement

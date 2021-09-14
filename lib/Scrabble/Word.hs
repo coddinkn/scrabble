@@ -101,8 +101,8 @@ getLetters board tilePlacement orientation direction =
     let (column, row) = position tilePlacement
         (limit, makePosition) =
             case orientation of
-                Vertical   -> (column, \n -> (n, row))
-                Horizontal -> (row, \n -> (column, n))
+                Vertical   -> (column, (, row))
+                Horizontal -> (row, (column,))
         (range, adjust) =
             case direction of
                 Before -> ([boardMin .. (limit - 1)], reverse)

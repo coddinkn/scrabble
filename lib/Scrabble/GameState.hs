@@ -33,7 +33,7 @@ import Control.Monad.Random
 import Cursor.List.NonEmpty
 import Data.List
 import Data.List.NonEmpty (NonEmpty(..), toList)
-import Data.Maybe (fromJust)
+import Data.Maybe (fromJust, fromMaybe)
 import qualified Data.Map.Strict as Map
 
 import Lens.Micro ((^.), (.~), (%~), (&))
@@ -182,7 +182,7 @@ modifyBoard :: (Board -> Board) -> InProgressState -> InProgressState
 modifyBoard modify state = state & board %~ modify
 
 stepCursor :: NonEmptyCursor a a -> NonEmptyCursor a a
-stepCursor cursor = maybe (nonEmptyCursorSelectFirst id id cursor) id $ nonEmptyCursorSelectNext id id cursor
+stepCursor cursor = fromMaybe (nonEmptyCursorSelectFirst id id cursor) $ nonEmptyCursorSelectNext id id cursor
 
 nextTurn :: InProgressState -> InProgressState
 nextTurn state = state & turnCursor %~ stepCursor
