@@ -41,6 +41,9 @@ waitingInstructions :: Widget Name
 waitingInstructions = B.border $
                       vLimit 3 $ str "[+] - Add user\n[-] - Remove user\n[Esc] - Quit"
 
+invalidEntryNotification :: Widget Name
+invalidEntryNotification = C.centerLayer . B.border $ str "Invalid entry: User already present\n   [ press any key to continue ]"
+
 drawUserList :: UserList -> Widget Name
 drawUserList list =
     B.borderWithLabel (str "Users") $
@@ -49,15 +52,16 @@ drawUserList list =
         L.renderList (\_ e -> str e) True list
 
 drawUserEnter :: UserEnter -> Widget Name
-drawUserEnter = C.centerLayer . B.border . hLimit 24 . E.renderEditor (str . concat) True
+drawUserEnter = C.centerLayer . B.borderWithLabel (str "Enter username") . hLimit 24 . E.renderEditor (str . concat) True
 
 drawWaitingApp :: WaitingApp -> [Widget Name]
 drawWaitingApp app =
     let userListWidget = C.center $ (drawUserList $ app ^. userList) <+> waitingInstructions
         userEnterWidget = drawUserEnter $ app ^. userEnter
-    in  if app ^. entering
-        then [ userEnterWidget, userListWidget ]
-        else [ userListWidget ]
+    in  case app ^. enterState of
+        InvalidEntry -> [ invalidEntryNotification, userListWidget ]
+        Entering -> [ userEnterWidget, userListWidget ]
+        NotEntering -> [ userListWidget ]
 
 drawInProgress :: GS.InProgressState -> [Widget Name]
 drawInProgress = pure . C.center . drawBoard . GS.getBoard

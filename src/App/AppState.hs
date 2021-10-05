@@ -4,11 +4,12 @@ module App.AppState
 , newAppState
 , userList
 , userEnter
-, entering
+, enterState
 , gameState
 , UserList
 , UserEnter
 , emptyUserEnter
+, EnterState(..)
 ) where
 
 import App.Name
@@ -31,11 +32,13 @@ type UserList = L.List Name Username
 
 type UserEnter = E.Editor Username Name
 
+data EnterState = Entering | NotEntering | InvalidEntry
+
 data WaitingApp =
-    WaitingApp { _userList  :: UserList
-               , _userEnter :: UserEnter
-               , _entering  :: Bool
-               , _gameState :: GameState
+    WaitingApp { _userList   :: UserList
+               , _userEnter  :: UserEnter
+               , _enterState :: EnterState
+               , _gameState  :: GameState
                }
 
 makeLenses ''WaitingApp
@@ -49,4 +52,4 @@ emptyUserEnter = E.editor UsernameEditor (Just 1) ""
 
 newAppState :: StdGen -> AppState
 newAppState = let list  = L.list UsernameList empty 1
-              in Waiting . WaitingApp list emptyUserEnter False . newGame
+              in Waiting . WaitingApp list emptyUserEnter NotEntering . newGame
