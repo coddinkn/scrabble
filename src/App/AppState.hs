@@ -4,12 +4,12 @@ module App.AppState
 , newAppState
 , userList
 , userEnter
-, enterState
+, status
 , gameState
 , UserList
 , UserEnter
 , emptyUserEnter
-, EnterState(..)
+, WaitingStatus(..)
 ) where
 
 import App.Name
@@ -32,13 +32,16 @@ type UserList = L.List Name Username
 
 type UserEnter = E.Editor Username Name
 
-data EnterState = Entering | NotEntering | InvalidEntry
+data WaitingStatus = Entering
+                   | NotEntering
+                   | InvalidEntry
+                   | CantStart
 
 data WaitingApp =
-    WaitingApp { _userList   :: UserList
-               , _userEnter  :: UserEnter
-               , _enterState :: EnterState
-               , _gameState  :: GameState
+    WaitingApp { _userList  :: UserList
+               , _userEnter :: UserEnter
+               , _status    :: WaitingStatus
+               , _gameState :: GameState
                }
 
 makeLenses ''WaitingApp

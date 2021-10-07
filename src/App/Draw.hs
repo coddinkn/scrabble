@@ -38,11 +38,14 @@ drawBoard theBoard =
           sides = str "\n" <=> vBox (str . (\x -> "\n " ++ show x ++ " ") <$> numbers)
 
 waitingInstructions :: Widget Name
-waitingInstructions = B.border $
-                      vLimit 3 $ str "[+] - Add user\n[-] - Remove user\n[Esc] - Quit"
+waitingInstructions = B.borderWithLabel (str "Controls") $
+                      vLimit 4 $ str "[+] - Add user\n[-] - Remove user\n[Esc] - Quit\n[Enter] - Start game"
 
 invalidEntryNotification :: Widget Name
 invalidEntryNotification = C.centerLayer . B.borderWithLabel (str "Invalid Entry") $ str "[ press any key to continue ]"
+
+cantStartNotification :: Widget Name
+cantStartNotification = C.centerLayer . B.borderWithLabel (str "Can't Start Game") $ str "    2-4 players required\n[ press any key to continue ]"
 
 drawUserList :: UserList -> Widget Name
 drawUserList list =
@@ -58,7 +61,8 @@ drawWaitingApp :: WaitingApp -> [Widget Name]
 drawWaitingApp app =
     let userListWidget = C.center $ (drawUserList $ app ^. userList) <+> waitingInstructions
         userEnterWidget = drawUserEnter $ app ^. userEnter
-    in  case app ^. enterState of
+    in  case app ^. status of
+        CantStart -> [ cantStartNotification, userListWidget ]
         InvalidEntry -> [ invalidEntryNotification, userListWidget ]
         Entering -> [ userEnterWidget, userListWidget ]
         NotEntering -> [ userListWidget ]

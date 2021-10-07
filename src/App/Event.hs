@@ -5,6 +5,9 @@ module App.Event
 import App.AppState
 import App.Name
 
+import Scrabble
+import qualified Scrabble.GameState as GS
+
 import qualified Data.Vector as Vec
 
 import qualified Brick.Types as T
@@ -30,7 +33,7 @@ appEvent :: AppState -> T.BrickEvent Name e -> T.EventM Name (T.Next AppState)
 
 appEvent (Waiting app) event =
     do maybeNewApp <-
-        case app ^. enterState of
+        case app ^. status of
             Entering ->
                 case event of
 
@@ -41,13 +44,13 @@ appEvent (Waiting app) event =
                             invalidEntry = editorContents `Vec.elem` userListContents || editorContents == ""
                         in return . Just . Waiting $
                             if invalidEntry
-                            then app & enterState .~ InvalidEntry
-                            else app & enterState .~ NotEntering
-                                     & userList   .~ newUserList
-                                     & userEnter  .~ emptyUserEnter
+                            then app & status .~ InvalidEntry
+                            else app & status .~ NotEntering
+                                     & userList .~ newUserList
+                                     & userEnter .~ emptyUserEnter
 
                     T.VtyEvent (V.EvKey V.KEsc []) ->
-                        return . Just . Waiting $ app & enterState .~ NotEntering
+                        return . Just . Waiting $ app & status .~ NotEntering
 
                     T.VtyEvent vtyEvent -> do
                         newUserEnter <- E.handleEditorEvent vtyEvent $ app ^. userEnter
@@ -59,10 +62,20 @@ appEvent (Waiting app) event =
                 case event of
 
                     T.VtyEvent (V.EvKey (V.KChar '+') []) ->
-                        return . Just . Waiting $ app & enterState .~ Entering
+                        return . Just . Waiting $ app & status .~ Entering
 
                     T.VtyEvent (V.EvKey V.KEsc []) ->
                         return Nothing
+
+                    T.VtyEvent (V.EvKey V.KEnter []) ->
+                        let players = L.listElements $ app ^. userList
+                            numberOfPlayers = Vec.length players
+                        in if numberOfPlayers >= 2 && numberOfPlayers <= 4
+                           then either undefined (\(GS.InProgress inProgressState) -> return . Just $ InProgress inProgressState) $
+                                playScrabble [] (app ^. gameState) $ do
+                                     mapM_ addPlayer players
+                                     mapM_ ready players
+                           else return . Just . Waiting $ app & status .~ CantStart
 
                     T.VtyEvent _ -> do
                         newUserList <- waitingEvent (app ^. userList) event
@@ -72,8 +85,14 @@ appEvent (Waiting app) event =
 
             InvalidEntry ->
                 case event of
-                    T.VtyEvent (V.EvKey _ []) -> return . Just . Waiting $ app & enterState .~ Entering
+                    T.VtyEvent (V.EvKey _ []) -> return . Just . Waiting $ app & status .~ Entering
                     _ -> return . Just $ Waiting app
+
+            CantStart ->
+                case event of
+                    T.VtyEvent (V.EvKey _ []) -> return . Just . Waiting $ app & status .~ NotEntering
+                    _ -> return . Just $ Waiting app
+
        case maybeNewApp of
            Just newApp -> M.continue newApp
            Nothing -> M.halt $ Waiting app
