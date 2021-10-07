@@ -42,7 +42,7 @@ waitingInstructions = B.border $
                       vLimit 3 $ str "[+] - Add user\n[-] - Remove user\n[Esc] - Quit"
 
 invalidEntryNotification :: Widget Name
-invalidEntryNotification = C.centerLayer . B.border $ str "Invalid entry: User already present\n   [ press any key to continue ]"
+invalidEntryNotification = C.centerLayer . B.borderWithLabel (str "Invalid Entry") $ str "[ press any key to continue ]"
 
 drawUserList :: UserList -> Widget Name
 drawUserList list =
