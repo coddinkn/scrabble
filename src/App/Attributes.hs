@@ -1,11 +1,31 @@
 module App.Attributes where
 
 import qualified Brick.Widgets.List as L
-import Brick.AttrMap (AttrMap, attrMap)
+import Brick.AttrMap (AttrMap, attrMap, attrName, AttrName)
 import qualified Graphics.Vty as V
+
+doubleLetterAttr :: AttrName
+doubleLetterAttr = attrName "doubleLetter"
+
+tripleLetterAttr :: AttrName
+tripleLetterAttr = attrName "tripleLetter"
+
+doubleWordAttr :: AttrName
+doubleWordAttr = attrName "doubleWord"
+
+tripleWordAttr :: AttrName
+tripleWordAttr = attrName "tripleWord"
+
+defaultAttr :: AttrName
+defaultAttr = attrName "default"
 
 attributeMap :: AttrMap
 attributeMap = attrMap V.defAttr
-    [ (L.listAttr, V.defAttr)
+    [ (defaultAttr, V.defAttr)
+    , (L.listAttr, V.defAttr)
     , (L.listSelectedAttr, V.defAttr `V.withForeColor` V.yellow)
+    , (doubleLetterAttr, V.defAttr `V.withForeColor` V.cyan)
+    , (tripleLetterAttr, V.defAttr `V.withForeColor` V.blue)
+    , (doubleWordAttr, V.defAttr `V.withForeColor` V.rgbColor (234 :: Int) 167 163)
+    , (tripleWordAttr, V.defAttr `V.withForeColor` V.red)
     ]

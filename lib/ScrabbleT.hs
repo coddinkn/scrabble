@@ -1,6 +1,7 @@
 module ScrabbleT
 ( ScrabbleT
 , playScrabbleT
+, evalScrabbleT
 , addPlayer
 , getScore
 , changeUsername
@@ -56,6 +57,9 @@ playScrabbleT :: Monad m => [String] -> GameState -> ScrabbleT m () -> m (Either
 playScrabbleT dictionary gameState scrabble = do
     (result, newGameState) <- flip runReaderT dictionary . flip runStateT gameState . runExceptT $ runScrabbleT scrabble
     return $ newGameState <$ result
+
+evalScrabbleT :: Monad m => [String] -> GameState -> ScrabbleT m a -> m (Either Exception a)
+evalScrabbleT dictionary gameState scrabble = flip runReaderT dictionary . flip evalStateT gameState . runExceptT $ runScrabbleT scrabble
 
 getFromWaiting :: Monad m => (WaitingState -> a) -> ScrabbleT m a
 getFromWaiting f = do gameState <- get

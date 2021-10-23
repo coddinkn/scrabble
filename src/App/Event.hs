@@ -71,8 +71,8 @@ appEvent (Waiting app) event =
                         let players = L.listElements $ app ^. userList
                             numberOfPlayers = Vec.length players
                         in if numberOfPlayers >= 2 && numberOfPlayers <= 4
-                           then either undefined (\(GS.InProgress inProgressState) -> return . Just $ InProgress inProgressState) $
-                                playScrabble [] (app ^. gameState) $ do
+                           then either undefined (\(GS.InProgress inProgressState) -> return . Just . InProgress $ InProgressApp [] inProgressState) $
+                                playScrabble [] (app ^. newGameState) $ do
                                      mapM_ addPlayer players
                                      mapM_ ready players
                            else return . Just . Waiting $ app & status .~ CantStart

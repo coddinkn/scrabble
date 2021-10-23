@@ -1,11 +1,14 @@
 module App.AppState
 ( AppState(..)
 , WaitingApp(..)
+, InProgressApp(..)
 , newAppState
 , userList
 , userEnter
 , status
+, dictionary
 , gameState
+, newGameState
 , UserList
 , UserEnter
 , emptyUserEnter
@@ -38,16 +41,23 @@ data WaitingStatus = Entering
                    | CantStart
 
 data WaitingApp =
-    WaitingApp { _userList  :: UserList
-               , _userEnter :: UserEnter
-               , _status    :: WaitingStatus
-               , _gameState :: GameState
+    WaitingApp { _userList     :: UserList
+               , _userEnter    :: UserEnter
+               , _status       :: WaitingStatus
+               , _newGameState :: GameState
                }
 
 makeLenses ''WaitingApp
 
+data InProgressApp =
+    InProgressApp { _dictionary :: [String]
+                  , _gameState  :: InProgressState
+                  }
+
+makeLenses ''InProgressApp
+
 data AppState = Waiting WaitingApp
-              | InProgress InProgressState
+              | InProgress InProgressApp
               | Over
 
 emptyUserEnter :: UserEnter

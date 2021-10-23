@@ -3,9 +3,11 @@ module App.Draw
 ) where
 
 import App.AppState
+import App.Attributes
 import App.Name
 
 import Scrabble.Board
+import Scrabble.Modifier
 import qualified Scrabble.GameState as GS
 
 import Data.List (groupBy)
@@ -15,17 +17,26 @@ import qualified Brick.Widgets.Border as B
 import qualified Brick.Widgets.Center as C
 import qualified Brick.Widgets.List as L
 import qualified Brick.Widgets.Edit as E
-import Brick.Widgets.Core (str, (<+>), (<=>), vBox, hBox, hLimit, vLimit)
+import Brick.Widgets.Core (str, (<+>), (<=>), vBox, hBox, hLimit, vLimit, withAttr)
 
 import Lens.Micro ((^.))
+
+drawPosition :: Board -> Position -> Widget Name
+drawPosition theBoard pos = withAttr modifierAttr . str $ " " ++ showTile theBoard pos ++ " "
+    where modifierAttr = case modifier pos of
+                             Just DoubleLetter -> doubleLetterAttr
+                             Just TripleLetter -> tripleLetterAttr
+                             Just DoubleWord   -> doubleWordAttr
+                             Just TripleWord   -> tripleWordAttr
+                             Nothing           -> defaultAttr
 
 drawBoard :: Board -> Widget Name
 drawBoard theBoard =
     let positions = (,) <$> [boardMin .. boardMax] <*> [boardMin .. boardMax]
         groupedPositions = groupBy (\a b -> fst a == fst b) positions
-        tileStrs = map (\pos -> " " ++ showTile theBoard pos ++ " ") <$> groupedPositions
+        tileWidgets = map (drawPosition theBoard) <$> groupedPositions
         v = "│"
-        rows = map ((\row -> str $ v ++ row ++ v) . foldl1 (\a b -> a ++ v ++ b)) tileStrs
+        rows = map ((\row -> str v <+> row <+> str v) . foldl1 (\a b -> a <+> str v <+> b)) tileWidgets
         h = str . concat $ ("├───" : replicate boardMax "┼───") ++ pure "┤"
         centerOfBoard = foldl1 (\a b -> a <=> h <=> b) rows
         top = str . concat $ ("┌───" : replicate boardMax "┬───") ++ pure "┐"
@@ -59,7 +70,7 @@ drawUserEnter = C.centerLayer . B.borderWithLabel (str "Enter username") . hLimi
 
 drawWaitingApp :: WaitingApp -> [Widget Name]
 drawWaitingApp app =
-    let userListWidget = C.center $ (drawUserList $ app ^. userList) <+> waitingInstructions
+    let userListWidget = C.center $ drawUserList (app ^. userList) <+> waitingInstructions
         userEnterWidget = drawUserEnter $ app ^. userEnter
     in  case app ^. status of
         CantStart -> [ cantStartNotification, userListWidget ]
@@ -67,13 +78,18 @@ drawWaitingApp app =
         Entering -> [ userEnterWidget, userListWidget ]
         NotEntering -> [ userListWidget ]
 
-drawInProgress :: GS.InProgressState -> [Widget Name]
-drawInProgress = pure . C.center . drawBoard . GS.getBoard
+drawWhosTurn :: InProgressApp -> Widget Name
+drawWhosTurn app = B.borderWithLabel (str "Current turn") . hLimit 24 . C.hCenter . str . GS.whosTurn $ app ^. gameState
+
+drawInProgressApp :: InProgressApp -> [Widget Name]
+drawInProgressApp app =
+    let board = B.border . drawBoard . GS.getBoard $ app ^. gameState
+        currentTurn = drawWhosTurn app
+    in pure . C.vCenter $ C.hCenter currentTurn <=> C.hCenter board
 
 drawApp :: AppState -> [Widget Name]
 
 drawApp (Waiting app) = drawWaitingApp app
 
-drawApp (InProgress inProgressState) = drawInProgress inProgressState
-
+drawApp (InProgress inProgressApp) = drawInProgressApp inProgressApp
 drawApp _ = undefined

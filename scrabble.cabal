@@ -38,6 +38,7 @@ library
                  , Scrabble.Board
                  , Scrabble.Player
                  , Scrabble.Position
+                 , Scrabble.Modifier
                  , Scrabble.Tile
                  , Scrabble.TilePlacement
                  , Scrabble.GameState
@@ -45,7 +46,6 @@ library
   other-modules: Paths_scrabble
                , ScrabbleT
                , MonadScrabble
-               , Scrabble.Modifier
                , Scrabble.Score
                , Scrabble.Word
   hs-source-dirs:
