@@ -22,13 +22,15 @@ import Brick.Widgets.Core (str, (<+>), (<=>), vBox, hBox, hLimit, vLimit, withAt
 import Lens.Micro ((^.))
 
 drawPosition :: Board -> Position -> Widget Name
-drawPosition theBoard pos = withAttr modifierAttr . str $ " " ++ showTile theBoard pos ++ " "
-    where modifierAttr = case modifier pos of
+drawPosition theBoard pos = withAttr positionAttr . str $ " " ++ showTile theBoard pos ++ " "
+    where positionAttr = case modifier pos of
                              Just DoubleLetter -> doubleLetterAttr
                              Just TripleLetter -> tripleLetterAttr
                              Just DoubleWord   -> doubleWordAttr
                              Just TripleWord   -> tripleWordAttr
-                             Nothing           -> defaultAttr
+                             Nothing           -> if pos == middle
+                                                  then doubleWordAttr
+                                                  else defaultAttr
 
 drawBoard :: Board -> Widget Name
 drawBoard theBoard =
@@ -41,8 +43,8 @@ drawBoard theBoard =
         centerOfBoard = foldl1 (\a b -> a <=> h <=> b) rows
         top = str . concat $ ("┌───" : replicate boardMax "┬───") ++ pure "┐"
         bottom = str . concat $ ("└───" : replicate boardMax "┴───") ++ pure "┘"
-        middle = topAndBottom <=> top <=> centerOfBoard <=> bottom <=> topAndBottom
-    in hBox [ sides, middle, sides ]
+        boardMiddle = topAndBottom <=> top <=> centerOfBoard <=> bottom <=> topAndBottom
+    in hBox [ sides, boardMiddle, sides ]
     where letters = [ 'A' .. 'O' ]
           numbers = [ 1 .. 15 ] :: [Int]
           topAndBottom = hBox $ (\x -> str $ "  " ++ pure x ++ " ") <$> letters

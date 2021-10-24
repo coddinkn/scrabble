@@ -7,6 +7,7 @@ module Scrabble.Board
 , showTile
 , boardMin
 , boardMax
+, middle
 ) where
 
 import Scrabble.Modifier
@@ -20,6 +21,9 @@ import Data.Map hiding (map)
 boardMax = 14
 boardMin = 0
 
+middle :: Position
+middle = (7, 7)
+
 newtype Board = Board (Map Position Tile)
     deriving Eq
 
@@ -29,8 +33,8 @@ tiles (Board tileMap) = tileMap
 showTile :: Board -> Position -> String
 showTile board position =
     let maybeTile = getTile board position
-        noTile = maybe " " show $ modifier position
-    in maybe noTile show maybeTile
+        underTile = maybe (if position == middle then "*" else " ") show (modifier position)
+    in maybe underTile show maybeTile
 
 showPosition :: Board -> Position -> String
 showPosition board position =

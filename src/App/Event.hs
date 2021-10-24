@@ -18,20 +18,20 @@ import qualified Graphics.Vty as V
 
 import Lens.Micro ((^.), (.~), (&))
 
-waitingEvent :: UserList -> T.BrickEvent Name e -> T.EventM Name UserList
+userListEvent :: UserList -> T.BrickEvent Name e -> T.EventM Name UserList
 
-waitingEvent list (T.VtyEvent (V.EvKey (V.KChar '-') [])) =
+userListEvent list (T.VtyEvent (V.EvKey (V.KChar '-') [])) =
     case L.listSelected list of
         Just i -> return $ L.listRemove i list
         Nothing -> return list
 
-waitingEvent list (T.VtyEvent event) = L.handleListEvent event list
+userListEvent list (T.VtyEvent event) = L.handleListEvent event list
 
-waitingEvent list _ = return list
+userListEvent list _ = return list
 
-appEvent :: AppState -> T.BrickEvent Name e -> T.EventM Name (T.Next AppState)
+waitingEvent :: WaitingApp -> T.BrickEvent Name e -> T.EventM Name (T.Next AppState)
 
-appEvent (Waiting app) event =
+waitingEvent app event =
     do maybeNewApp <-
         case app ^. status of
             Entering ->
@@ -78,7 +78,7 @@ appEvent (Waiting app) event =
                            else return . Just . Waiting $ app & status .~ CantStart
 
                     T.VtyEvent _ -> do
-                        newUserList <- waitingEvent (app ^. userList) event
+                        newUserList <- userListEvent (app ^. userList) event
                         return . Just . Waiting $ app & userList .~ newUserList
 
                     _ -> return . Just $ Waiting app
@@ -96,5 +96,9 @@ appEvent (Waiting app) event =
        case maybeNewApp of
            Just newApp -> M.continue newApp
            Nothing -> M.halt $ Waiting app
+
+appEvent :: AppState -> T.BrickEvent Name e -> T.EventM Name (T.Next AppState)
+
+appEvent (Waiting app) event = waitingEvent app event
 
 appEvent app _ = M.halt app
