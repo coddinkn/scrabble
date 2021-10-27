@@ -74,7 +74,7 @@ drawWaitingApp :: WaitingApp -> [Widget Name]
 drawWaitingApp app =
     let userListWidget = C.center $ drawUserList (app ^. userList) <+> waitingInstructions
         userEnterWidget = drawUserEnter $ app ^. userEnter
-    in  case app ^. status of
+    in  case app ^. waitingStatus of
         CantStart -> [ cantStartNotification, userListWidget ]
         InvalidEntry -> [ invalidEntryNotification, userListWidget ]
         Entering -> [ userEnterWidget, userListWidget ]
@@ -83,15 +83,17 @@ drawWaitingApp app =
 drawWhosTurn :: InProgressApp -> Widget Name
 drawWhosTurn app = B.borderWithLabel (str "Current turn") . hLimit 24 . C.hCenter . str . GS.whosTurn $ app ^. gameState
 
+drawActionList :: ActionList -> Widget Name
+drawActionList = B.border . vLimit 3 . hLimit 8 . L.renderList (\_ e -> str $ show e) True
+
 drawInProgressApp :: InProgressApp -> [Widget Name]
 drawInProgressApp app =
     let board = B.border . drawBoard . GS.getBoard $ app ^. gameState
         currentTurn = drawWhosTurn app
-    in pure . C.vCenter $ C.hCenter currentTurn <=> C.hCenter board
+        actions = drawActionList $ app ^. actionList
+    in pure . C.vCenter $ C.hCenter currentTurn <=> C.hCenter (board <+> actions)
 
 drawApp :: AppState -> [Widget Name]
-
 drawApp (Waiting app) = drawWaitingApp app
-
 drawApp (InProgress inProgressApp) = drawInProgressApp inProgressApp
 drawApp _ = undefined

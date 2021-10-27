@@ -33,7 +33,7 @@ waitingEvent :: WaitingApp -> T.BrickEvent Name e -> T.EventM Name (T.Next AppSt
 
 waitingEvent app event =
     do maybeNewApp <-
-        case app ^. status of
+        case app ^. waitingStatus of
             Entering ->
                 case event of
 
@@ -44,13 +44,13 @@ waitingEvent app event =
                             invalidEntry = editorContents `Vec.elem` userListContents || editorContents == ""
                         in return . Just . Waiting $
                             if invalidEntry
-                            then app & status .~ InvalidEntry
-                            else app & status .~ NotEntering
+                            then app & waitingStatus .~ InvalidEntry
+                            else app & waitingStatus .~ NotEntering
                                      & userList .~ newUserList
                                      & userEnter .~ emptyUserEnter
 
                     T.VtyEvent (V.EvKey V.KEsc []) ->
-                        return . Just . Waiting $ app & status .~ NotEntering
+                        return . Just . Waiting $ app & waitingStatus .~ NotEntering
 
                     T.VtyEvent vtyEvent -> do
                         newUserEnter <- E.handleEditorEvent vtyEvent $ app ^. userEnter
@@ -62,7 +62,7 @@ waitingEvent app event =
                 case event of
 
                     T.VtyEvent (V.EvKey (V.KChar '+') []) ->
-                        return . Just . Waiting $ app & status .~ Entering
+                        return . Just . Waiting $ app & waitingStatus .~ Entering
 
                     T.VtyEvent (V.EvKey V.KEsc []) ->
                         return Nothing
@@ -71,11 +71,11 @@ waitingEvent app event =
                         let players = L.listElements $ app ^. userList
                             numberOfPlayers = Vec.length players
                         in if numberOfPlayers >= 2 && numberOfPlayers <= 4
-                           then either undefined (\(GS.InProgress inProgressState) -> return . Just . InProgress $ InProgressApp [] inProgressState) $
-                                playScrabble [] (app ^. newGameState) $ do
+                           then either undefined (\(GS.InProgress inProgressState) -> return . Just . InProgress $ newInProgressApp [] inProgressState) $
+                               playScrabble [] (app ^. newGameState) $ do
                                      mapM_ addPlayer players
                                      mapM_ ready players
-                           else return . Just . Waiting $ app & status .~ CantStart
+                           else return . Just . Waiting $ app & waitingStatus .~ CantStart
 
                     T.VtyEvent _ -> do
                         newUserList <- userListEvent (app ^. userList) event
@@ -85,20 +85,35 @@ waitingEvent app event =
 
             InvalidEntry ->
                 case event of
-                    T.VtyEvent (V.EvKey _ []) -> return . Just . Waiting $ app & status .~ Entering
+                    T.VtyEvent (V.EvKey _ []) -> return . Just . Waiting $ app & waitingStatus .~ Entering
                     _ -> return . Just $ Waiting app
 
             CantStart ->
                 case event of
-                    T.VtyEvent (V.EvKey _ []) -> return . Just . Waiting $ app & status .~ NotEntering
+                    T.VtyEvent (V.EvKey _ []) -> return . Just . Waiting $ app & waitingStatus .~ NotEntering
                     _ -> return . Just $ Waiting app
 
        case maybeNewApp of
            Just newApp -> M.continue newApp
            Nothing -> M.halt $ Waiting app
 
+actionListEvent :: ActionList -> T.BrickEvent Name e -> T.EventM Name ActionList
+
+actionListEvent list (T.VtyEvent event) = L.handleListEvent event list
+
+actionListEvent list _ = return list
+
+inProgressEvent :: InProgressApp -> T.BrickEvent Name e -> T.EventM Name (T.Next AppState)
+
+inProgressEvent app (T.VtyEvent (V.EvKey V.KEsc [])) = M.halt $ InProgress app
+
+inProgressEvent app event@(T.VtyEvent _) = do
+    newActionList <- actionListEvent (app ^. actionList) event
+    M.continue . InProgress $ app & actionList .~ newActionList
+
+inProgressEvent app _ = M.continue $ InProgress app
+
 appEvent :: AppState -> T.BrickEvent Name e -> T.EventM Name (T.Next AppState)
-
 appEvent (Waiting app) event = waitingEvent app event
-
+appEvent (InProgress app) event = inProgressEvent app event
 appEvent app _ = M.halt app

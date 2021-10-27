@@ -5,17 +5,21 @@ module App.AppState
 , newAppState
 , userList
 , userEnter
-, status
+, waitingStatus
 , dictionary
 , gameState
 , newGameState
+, newInProgressApp
+, ActionList
+, actionList
 , UserList
 , UserEnter
 , emptyUserEnter
 , WaitingStatus(..)
 ) where
 
-import App.Name
+import App.Name (Name)
+import qualified App.Name as Name
 
 import Scrabble.GameState ( Username
                           , GameState
@@ -24,7 +28,7 @@ import Scrabble.GameState ( Username
                           )
 
 import Control.Monad.Random (StdGen)
-import Data.Vector (empty)
+import Data.Vector (empty, fromList)
 
 import qualified Brick.Widgets.List as L
 import qualified Brick.Widgets.Edit as E
@@ -41,28 +45,44 @@ data WaitingStatus = Entering
                    | CantStart
 
 data WaitingApp =
-    WaitingApp { _userList     :: UserList
-               , _userEnter    :: UserEnter
-               , _status       :: WaitingStatus
-               , _newGameState :: GameState
+    WaitingApp { _userList      :: UserList
+               , _userEnter     :: UserEnter
+               , _waitingStatus :: WaitingStatus
+               , _newGameState  :: GameState
                }
 
 makeLenses ''WaitingApp
 
+data InProgressStatus = Menu
+                      | Pass
+                      | Exchange
+                      | Place
+                      deriving (Show)
+
+type ActionList = L.List Name InProgressStatus
+
 data InProgressApp =
-    InProgressApp { _dictionary :: [String]
-                  , _gameState  :: InProgressState
+    InProgressApp { _dictionary       :: [String]
+                  , _gameState        :: InProgressState
+                  , _inProgressStatus :: InProgressStatus
+                  , _actionList       :: ActionList
                   }
 
 makeLenses ''InProgressApp
 
-data AppState = Waiting WaitingApp
+data AppState = Waiting    WaitingApp
               | InProgress InProgressApp
               | Over
 
 emptyUserEnter :: UserEnter
-emptyUserEnter = E.editor UsernameEditor (Just 1) ""
+emptyUserEnter = E.editor Name.UsernameEditor (Just 1) ""
+
+newInProgressApp :: [String] -> InProgressState -> InProgressApp
+newInProgressApp dict inProgressState =
+    let newActionList = L.list Name.ActionList (fromList [Pass, Exchange, Place]) 1
+    in  InProgressApp dict inProgressState Menu newActionList
 
 newAppState :: StdGen -> AppState
-newAppState = let list  = L.list UsernameList empty 1
-              in Waiting . WaitingApp list emptyUserEnter NotEntering . newGame
+newAppState =
+    let newUserList  = L.list Name.UsernameList empty 1
+    in  Waiting . WaitingApp newUserList emptyUserEnter NotEntering . newGame
