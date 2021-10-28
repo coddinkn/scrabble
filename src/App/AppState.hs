@@ -11,6 +11,7 @@ module App.AppState
 , newGameState
 , newInProgressApp
 , ActionList
+, inProgressStatus
 , actionList
 , UserList
 , UserEnter
