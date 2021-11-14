@@ -17,6 +17,7 @@ module App.AppState
 , UserEnter
 , emptyUserEnter
 , WaitingStatus(..)
+, InProgressStatus(..)
 ) where
 
 import App.Name (Name)

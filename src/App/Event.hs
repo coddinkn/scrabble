@@ -8,6 +8,7 @@ import App.Name
 import Scrabble
 import qualified Scrabble.GameState as GS
 
+import Data.Maybe (fromJust)
 import qualified Data.Vector as Vec
 
 import qualified Brick.Types as T
@@ -98,18 +99,42 @@ actionListEvent list (T.VtyEvent event) = L.handleListEvent event list
 
 actionListEvent list _ = return list
 
+playScrabbleApp :: InProgressApp -> Scrabble () -> AppState
+playScrabbleApp app scrabble =
+
+    case playScrabble (app ^. dictionary) (GS.InProgress $ app ^. gameState) scrabble of
+
+        Right (GS.Waiting _) -> undefined -- A transition back to waiting should never occur
+
+        Right (GS.InProgress inProgressGameState) -> InProgress $ app & gameState .~ inProgressGameState
+
+        Right (GS.Over _) -> Over
+
+        Left exception -> error $ show exception
+
+
 inProgressEvent :: InProgressApp -> T.BrickEvent Name e -> T.EventM Name (T.Next AppState)
 
 inProgressEvent app event = do
 
     case app ^. inProgressStatus of
 
-        _ -> case event of
-
+        Menu -> case event of
             T.VtyEvent (V.EvKey V.KEsc []) -> M.halt $ InProgress app
+            T.VtyEvent (V.EvKey V.KEnter []) ->
+                let newStatus = snd . fromJust . L.listSelectedElement $ app ^. actionList
+                in  case newStatus of
+                        Pass -> case playScrabbleApp app pass of
+                            Over -> M.halt Over
+                            newApp -> M.continue newApp
+                        _ -> M.continue . InProgress $ app & inProgressStatus .~ newStatus
 
             _ -> do newActionList <- actionListEvent (app ^. actionList) event
                     M.continue . InProgress $ app & actionList .~ newActionList
+
+        _ -> case event of
+            T.VtyEvent (V.EvKey V.KEsc []) -> M.halt $ InProgress app
+            _ -> M.continue $ InProgress app
 
 appEvent :: AppState -> T.BrickEvent Name e -> T.EventM Name (T.Next AppState)
 appEvent (Waiting app) event = waitingEvent app event

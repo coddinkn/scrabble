@@ -83,14 +83,14 @@ drawWaitingApp app =
 drawWhosTurn :: InProgressApp -> Widget Name
 drawWhosTurn app = B.borderWithLabel (str "Current turn") . hLimit 24 . C.hCenter . str . GS.whosTurn $ app ^. gameState
 
-drawActionList :: ActionList -> Widget Name
-drawActionList = B.border . vLimit 3 . hLimit 8 . L.renderList (\_ e -> str $ show e) True
+drawActionList :: String -> ActionList -> Widget Name
+drawActionList label = B.borderWithLabel (str label) . vLimit 3 . hLimit 8 . L.renderList (\_ e -> str $ show e) True
 
 drawInProgressApp :: InProgressApp -> [Widget Name]
 drawInProgressApp app =
     let board = B.border . drawBoard . GS.getBoard $ app ^. gameState
         currentTurn = drawWhosTurn app
-        actions = drawActionList $ app ^. actionList
+        actions = drawActionList (show $ app ^. inProgressStatus) $ app ^. actionList
     in pure . C.vCenter $ C.hCenter currentTurn <=> C.hCenter (board <+> actions)
 
 drawApp :: AppState -> [Widget Name]

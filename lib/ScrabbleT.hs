@@ -166,7 +166,8 @@ instance (Monad m) => MonadScrabble (ScrabbleT m) where
         passed <- getFromPlayer username (^. passedLastTurn)
         if passed
             then modifyInProgress $ Over . GS.endGame
-            else modifyInProgress $ InProgress . GS.modifyPlayer username (passedLastTurn .~ True)
+            else do modifyInProgress $ InProgress . GS.modifyPlayer username (passedLastTurn .~ True)
+                    modifyInProgress $ InProgress . GS.nextTurn
 
     exchange maybeTile = do
         username <- whosTurn
