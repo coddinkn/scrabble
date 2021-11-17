@@ -28,6 +28,8 @@ import Scrabble.GameState ( Username
                           , InProgressState
                           , newGame
                           )
+import Scrabble.Position (Position)
+import Scrabble.TilePlacement (TilePlacement)
 
 import Control.Monad.Random (StdGen)
 import Data.Vector (empty, fromList)
@@ -58,7 +60,7 @@ makeLenses ''WaitingApp
 data InProgressStatus = Menu
                       | Pass
                       | Exchange
-                      | Place
+                      | Place    Position [TilePlacement]
                       deriving (Show)
 
 type ActionList = L.List Name InProgressStatus
@@ -81,7 +83,7 @@ emptyUserEnter = E.editor Name.UsernameEditor (Just 1) ""
 
 newInProgressApp :: [String] -> InProgressState -> InProgressApp
 newInProgressApp dict inProgressState =
-    let newActionList = L.list Name.ActionList (fromList [Pass, Exchange, Place]) 1
+    let newActionList = L.list Name.ActionList (fromList [Pass, Exchange, Place (7, 7) []]) 1
     in  InProgressApp dict inProgressState Menu newActionList
 
 newAppState :: StdGen -> AppState

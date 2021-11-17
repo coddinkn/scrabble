@@ -112,7 +112,6 @@ playScrabbleApp app scrabble =
 
         Left exception -> error $ show exception
 
-
 inProgressEvent :: InProgressApp -> T.BrickEvent Name e -> T.EventM Name (T.Next AppState)
 
 inProgressEvent app event = do
@@ -131,6 +130,18 @@ inProgressEvent app event = do
 
             _ -> do newActionList <- actionListEvent (app ^. actionList) event
                     M.continue . InProgress $ app & actionList .~ newActionList
+
+        Place (r, c) placements -> case event of
+            T.VtyEvent (V.EvKey V.KEsc []) -> M.halt $ InProgress app
+            T.VtyEvent (V.EvKey key []) ->
+                let newPos = case key of
+                                 V.KUp -> if r > 0 then (r - 1, c) else (r, c)
+                                 V.KLeft ->  if c > 0 then (r, c - 1) else (r, c)
+                                 V.KRight -> if c < 14 then (r, c + 1) else (r, c)
+                                 V.KDown -> if r < 14 then (r + 1, c) else (r, c)
+                                 _ -> (r, c)
+                in M.continue . InProgress $ app & inProgressStatus .~ Place newPos placements
+            _ -> M.continue $ InProgress app
 
         _ -> case event of
             T.VtyEvent (V.EvKey V.KEsc []) -> M.halt $ InProgress app

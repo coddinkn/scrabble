@@ -13,6 +13,7 @@ import qualified Scrabble.GameState as GS
 import Data.List (groupBy)
 
 import Brick.Types (Widget)
+import Brick.AttrMap (AttrName)
 import qualified Brick.Widgets.Border as B
 import qualified Brick.Widgets.Center as C
 import qualified Brick.Widgets.List as L
@@ -21,22 +22,32 @@ import Brick.Widgets.Core (str, (<+>), (<=>), vBox, hBox, hLimit, vLimit, withAt
 
 import Lens.Micro ((^.))
 
-drawPosition :: Board -> Position -> Widget Name
-drawPosition theBoard pos = withAttr positionAttr . str $ " " ++ showTile theBoard pos ++ " "
-    where positionAttr = case modifier pos of
-                             Just DoubleLetter -> doubleLetterAttr
-                             Just TripleLetter -> tripleLetterAttr
-                             Just DoubleWord   -> doubleWordAttr
-                             Just TripleWord   -> tripleWordAttr
-                             Nothing           -> if pos == middle
-                                                  then doubleWordAttr
-                                                  else defaultAttr
+boardPositionAttr :: Position -> AttrName
+boardPositionAttr pos =
+    case modifier pos of
+                     Just DoubleLetter -> doubleLetterAttr
+                     Just TripleLetter -> tripleLetterAttr
+                     Just DoubleWord   -> doubleWordAttr
+                     Just TripleWord   -> tripleWordAttr
+                     Nothing           -> if pos == middle
+                                          then doubleWordAttr
+                                          else defaultAttr
 
-drawBoard :: Board -> Widget Name
-drawBoard theBoard =
+drawPosition :: InProgressApp -> Position -> Widget Name
+drawPosition app pos = withAttr positionAttr . str $ " " ++ showTile board pos ++ " "
+    where board = GS.getBoard $ app ^. gameState
+          positionAttr =
+              case app ^. inProgressStatus of
+                  Place selectedPosition _ -> if selectedPosition == pos
+                                              then selectedForPlacingAttr
+                                              else boardPositionAttr pos
+                  _ -> boardPositionAttr pos
+
+drawBoard :: InProgressApp -> Widget Name
+drawBoard app =
     let positions = (,) <$> [boardMin .. boardMax] <*> [boardMin .. boardMax]
         groupedPositions = groupBy (\a b -> fst a == fst b) positions
-        tileWidgets = map (drawPosition theBoard) <$> groupedPositions
+        tileWidgets = map (drawPosition app) <$> groupedPositions
         v = "│"
         rows = map ((\row -> str v <+> row <+> str v) . foldl1 (\a b -> a <+> str v <+> b)) tileWidgets
         h = str . concat $ ("├───" : replicate boardMax "┼───") ++ pure "┤"
@@ -88,7 +99,7 @@ drawActionList label = B.borderWithLabel (str label) . vLimit 3 . hLimit 8 . L.r
 
 drawInProgressApp :: InProgressApp -> [Widget Name]
 drawInProgressApp app =
-    let board = B.border . drawBoard . GS.getBoard $ app ^. gameState
+    let board = B.border . drawBoard $ app
         currentTurn = drawWhosTurn app
         actions = drawActionList (show $ app ^. inProgressStatus) $ app ^. actionList
     in pure . C.vCenter $ C.hCenter currentTurn <=> C.hCenter (board <+> actions)
