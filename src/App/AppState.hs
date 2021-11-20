@@ -11,6 +11,8 @@ module App.AppState
 , newGameState
 , newInProgressApp
 , ActionList
+, TilesList
+, tilesList
 , inProgressStatus
 , actionList
 , UserList
@@ -27,17 +29,23 @@ import Scrabble.GameState ( Username
                           , GameState
                           , InProgressState
                           , newGame
+                          , players
+                          , whosTurn
                           )
 import Scrabble.Position (Position)
+import Scrabble.Player (playerTiles)
+import Scrabble.Tile (Tile)
 import Scrabble.TilePlacement (TilePlacement)
 
 import Control.Monad.Random (StdGen)
+import Data.Map ((!))
 import Data.Vector (empty, fromList)
 
 import qualified Brick.Widgets.List as L
 import qualified Brick.Widgets.Edit as E
 
 import Lens.Micro.TH
+import Lens.Micro ((^.))
 
 type UserList = L.List Name Username
 
@@ -61,15 +69,24 @@ data InProgressStatus = Menu
                       | Pass
                       | Exchange
                       | Place    Position [TilePlacement]
-                      deriving (Show)
+                      deriving (Eq)
+
+instance Show InProgressStatus where
+    show Menu = "Menu"
+    show Pass = "Pass"
+    show Exchange = "Exchange"
+    show (Place _ _) = "Place"
 
 type ActionList = L.List Name InProgressStatus
+
+type TilesList = L.List Name Tile
 
 data InProgressApp =
     InProgressApp { _dictionary       :: [String]
                   , _gameState        :: InProgressState
                   , _inProgressStatus :: InProgressStatus
                   , _actionList       :: ActionList
+                  , _tilesList        :: TilesList
                   }
 
 makeLenses ''InProgressApp
@@ -81,10 +98,17 @@ data AppState = Waiting    WaitingApp
 emptyUserEnter :: UserEnter
 emptyUserEnter = E.editor Name.UsernameEditor (Just 1) ""
 
+currentTurnTiles :: InProgressState -> [Tile]
+currentTurnTiles inProgressState =
+    let user = whosTurn inProgressState
+        player = (inProgressState ^. players) ! user
+    in player ^. playerTiles
+
 newInProgressApp :: [String] -> InProgressState -> InProgressApp
 newInProgressApp dict inProgressState =
     let newActionList = L.list Name.ActionList (fromList [Pass, Exchange, Place (7, 7) []]) 1
-    in  InProgressApp dict inProgressState Menu newActionList
+        newTilesList = L.list Name.TilesList (fromList $ currentTurnTiles inProgressState) 3
+    in  InProgressApp dict inProgressState Menu newActionList newTilesList
 
 newAppState :: StdGen -> AppState
 newAppState =

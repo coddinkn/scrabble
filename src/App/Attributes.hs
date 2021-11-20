@@ -27,7 +27,7 @@ attributeMap :: AttrMap
 attributeMap = attrMap V.defAttr
     [ (defaultAttr, V.defAttr)
     , (L.listAttr, V.defAttr)
-    , (L.listSelectedAttr, V.defAttr `V.withForeColor` V.yellow)
+    , (L.listSelectedFocusedAttr, V.defAttr `V.withForeColor` V.yellow)
     , (doubleLetterAttr, V.defAttr `V.withForeColor` V.cyan)
     , (tripleLetterAttr, V.defAttr `V.withForeColor` V.blue)
     , (doubleWordAttr, V.defAttr `V.withForeColor` V.rgbColor (234 :: Int) 167 163)

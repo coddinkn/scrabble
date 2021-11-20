@@ -7,6 +7,7 @@ import App.Attributes
 import App.Name
 
 import Scrabble.Board
+import Scrabble.Tile (Tile)
 import Scrabble.Modifier
 import qualified Scrabble.GameState as GS
 
@@ -94,15 +95,24 @@ drawWaitingApp app =
 drawWhosTurn :: InProgressApp -> Widget Name
 drawWhosTurn app = B.borderWithLabel (str "Current turn") . hLimit 24 . C.hCenter . str . GS.whosTurn $ app ^. gameState
 
-drawActionList :: String -> ActionList -> Widget Name
-drawActionList label = B.borderWithLabel (str label) . vLimit 3 . hLimit 8 . L.renderList (\_ e -> str $ show e) True
+drawActionList :: InProgressStatus -> ActionList -> Widget Name
+drawActionList status = B.borderWithLabel (str "Actions") . vLimit 3 . hLimit 8 . L.renderList (\_ e -> str $ show e) focused
+    where focused = status == Menu
+
+drawTile :: Tile -> Widget Name
+drawTile = B.border . str . spaceOut . show
+    where spaceOut tileStr = " " ++ tileStr ++ " "
+
+drawTilesList :: TilesList -> Widget Name
+drawTilesList = B.borderWithLabel (str "Tiles") . vLimit 21 . hLimit 5 . L.renderList (\_ e -> drawTile e) False
 
 drawInProgressApp :: InProgressApp -> [Widget Name]
 drawInProgressApp app =
     let board = B.border . drawBoard $ app
         currentTurn = drawWhosTurn app
-        actions = drawActionList (show $ app ^. inProgressStatus) $ app ^. actionList
-    in pure . C.vCenter $ C.hCenter currentTurn <=> C.hCenter (board <+> actions)
+        actions = drawActionList (app ^. inProgressStatus) $ app ^. actionList
+        tiles = drawTilesList $ app ^. tilesList
+    in pure . C.vCenter $ C.hCenter currentTurn <=> C.hCenter (board <+> (actions <=> tiles))
 
 drawApp :: AppState -> [Widget Name]
 drawApp (Waiting app) = drawWaitingApp app

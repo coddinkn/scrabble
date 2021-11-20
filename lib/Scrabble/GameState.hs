@@ -10,6 +10,7 @@ module Scrabble.GameState
 , newGame
 , addUser
 , users
+, players
 , getUsers
 , readyUser
 , readyUserWithTiles -- shenanigans

@@ -132,7 +132,8 @@ inProgressEvent app event = do
                     M.continue . InProgress $ app & actionList .~ newActionList
 
         Place (r, c) placements -> case event of
-            T.VtyEvent (V.EvKey V.KEsc []) -> M.halt $ InProgress app
+            T.VtyEvent (V.EvKey V.KEsc []) -> M.continue . InProgress $ app & inProgressStatus .~ Menu
+            T.VtyEvent (V.EvKey V.KEnter []) -> M.halt $ InProgress app
             T.VtyEvent (V.EvKey key []) ->
                 let newPos = case key of
                                  V.KUp -> if r > 0 then (r - 1, c) else (r, c)
