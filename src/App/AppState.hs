@@ -20,6 +20,7 @@ module App.AppState
 , emptyUserEnter
 , WaitingStatus(..)
 , InProgressStatus(..)
+, PlaceStatus(..)
 ) where
 
 import App.Name (Name)
@@ -65,17 +66,21 @@ data WaitingApp =
 
 makeLenses ''WaitingApp
 
+data PlaceStatus = SelectingPosition
+                 | SelectingTile
+                 deriving (Eq)
+
 data InProgressStatus = Menu
                       | Pass
                       | Exchange
-                      | Place    Position [TilePlacement]
+                      | Place    Position [TilePlacement] PlaceStatus
                       deriving (Eq)
 
 instance Show InProgressStatus where
     show Menu = "Menu"
     show Pass = "Pass"
     show Exchange = "Exchange"
-    show (Place _ _) = "Place"
+    show (Place _ _ _) = "Place"
 
 type ActionList = L.List Name InProgressStatus
 
@@ -104,11 +109,14 @@ currentTurnTiles inProgressState =
         player = (inProgressState ^. players) ! user
     in player ^. playerTiles
 
+newTilesList :: InProgressState -> TilesList
+newTilesList inProgressState =
+    L.list Name.TilesList (fromList $ currentTurnTiles inProgressState) 3
+
 newInProgressApp :: [String] -> InProgressState -> InProgressApp
 newInProgressApp dict inProgressState =
-    let newActionList = L.list Name.ActionList (fromList [Pass, Exchange, Place (7, 7) []]) 1
-        newTilesList = L.list Name.TilesList (fromList $ currentTurnTiles inProgressState) 3
-    in  InProgressApp dict inProgressState Menu newActionList newTilesList
+    let newActionList = L.list Name.ActionList (fromList [Pass, Exchange, Place (7, 7) [] SelectingPosition]) 1
+    in  InProgressApp dict inProgressState Menu newActionList $ newTilesList inProgressState
 
 newAppState :: StdGen -> AppState
 newAppState =

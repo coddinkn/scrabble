@@ -94,10 +94,12 @@ waitingEvent app event =
                 _ -> M.continue $ Waiting app
 
 actionListEvent :: ActionList -> T.BrickEvent Name e -> T.EventM Name ActionList
-
 actionListEvent list (T.VtyEvent event) = L.handleListEvent event list
-
 actionListEvent list _ = return list
+
+tilesListEvent :: TilesList -> T.BrickEvent Name e -> T.EventM Name TilesList
+tilesListEvent list (T.VtyEvent event) = L.handleListEvent event list
+tilesListEvent list _ = return list
 
 playScrabbleApp :: InProgressApp -> Scrabble () -> AppState
 playScrabbleApp app scrabble =
@@ -119,7 +121,9 @@ inProgressEvent app event = do
     case app ^. inProgressStatus of
 
         Menu -> case event of
+
             T.VtyEvent (V.EvKey V.KEsc []) -> M.halt $ InProgress app
+
             T.VtyEvent (V.EvKey V.KEnter []) ->
                 let newStatus = snd . fromJust . L.listSelectedElement $ app ^. actionList
                 in  case newStatus of
@@ -131,17 +135,33 @@ inProgressEvent app event = do
             _ -> do newActionList <- actionListEvent (app ^. actionList) event
                     M.continue . InProgress $ app & actionList .~ newActionList
 
-        Place (r, c) placements -> case event of
-            T.VtyEvent (V.EvKey V.KEsc []) -> M.continue . InProgress $ app & inProgressStatus .~ Menu
-            T.VtyEvent (V.EvKey V.KEnter []) -> M.halt $ InProgress app
+        Place (r, c) placements placeStatus -> case event of
+
+            T.VtyEvent (V.EvKey V.KEsc []) ->
+                case placeStatus of
+                    SelectingPosition -> M.continue . InProgress $ app & inProgressStatus .~ Menu
+                    SelectingTile ->
+                        let newPlaceStatus = Place (r, c) placements SelectingPosition
+                        in  M.continue . InProgress $ app & inProgressStatus .~ newPlaceStatus
+
+            T.VtyEvent (V.EvKey V.KEnter []) ->
+                M.continue . InProgress $ app & inProgressStatus .~ Place (r, c) placements SelectingTile
+
             T.VtyEvent (V.EvKey key []) ->
-                let newPos = case key of
-                                 V.KUp -> if r > 0 then (r - 1, c) else (r, c)
-                                 V.KLeft ->  if c > 0 then (r, c - 1) else (r, c)
-                                 V.KRight -> if c < 14 then (r, c + 1) else (r, c)
-                                 V.KDown -> if r < 14 then (r + 1, c) else (r, c)
-                                 _ -> (r, c)
-                in M.continue . InProgress $ app & inProgressStatus .~ Place newPos placements
+                case placeStatus of
+
+                    SelectingPosition ->
+                        let newPos = case key of
+                                         V.KUp -> if r > 0 then (r - 1, c) else (r, c)
+                                         V.KLeft ->  if c > 0 then (r, c - 1) else (r, c)
+                                         V.KRight -> if c < 14 then (r, c + 1) else (r, c)
+                                         V.KDown -> if r < 14 then (r + 1, c) else (r, c)
+                                         _ -> (r, c)
+                        in M.continue . InProgress $ app & inProgressStatus .~ Place newPos placements placeStatus
+
+                    SelectingTile -> do newTilesList <- tilesListEvent (app ^. tilesList) event
+                                        M.continue . InProgress $ app & tilesList .~ newTilesList
+
             _ -> M.continue $ InProgress app
 
         _ -> case event of

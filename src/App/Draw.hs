@@ -39,9 +39,12 @@ drawPosition app pos = withAttr positionAttr . str $ " " ++ showTile board pos +
     where board = GS.getBoard $ app ^. gameState
           positionAttr =
               case app ^. inProgressStatus of
-                  Place selectedPosition _ -> if selectedPosition == pos
-                                              then selectedForPlacingAttr
-                                              else boardPositionAttr pos
+                  Place selectedPosition _ placeStatus ->
+                    if selectedPosition == pos
+                    then case placeStatus of
+                            SelectingPosition -> selectedForPlacingFocusedAttr
+                            SelectingTile -> selectedForPlacingAttr
+                    else boardPositionAttr pos
                   _ -> boardPositionAttr pos
 
 drawBoard :: InProgressApp -> Widget Name
@@ -103,15 +106,18 @@ drawTile :: Tile -> Widget Name
 drawTile = B.border . str . spaceOut . show
     where spaceOut tileStr = " " ++ tileStr ++ " "
 
-drawTilesList :: TilesList -> Widget Name
-drawTilesList = B.borderWithLabel (str "Tiles") . vLimit 21 . hLimit 5 . L.renderList (\_ e -> drawTile e) False
+drawTilesList :: InProgressStatus -> TilesList -> Widget Name
+drawTilesList status = B.borderWithLabel (str "Tiles") . vLimit 21 . hLimit 5 . L.renderList (\_ e -> drawTile e) focused
+    where focused = case status of
+                         Place _ _ SelectingTile -> True
+                         _ -> False
 
 drawInProgressApp :: InProgressApp -> [Widget Name]
 drawInProgressApp app =
     let board = B.border . drawBoard $ app
         currentTurn = drawWhosTurn app
         actions = drawActionList (app ^. inProgressStatus) $ app ^. actionList
-        tiles = drawTilesList $ app ^. tilesList
+        tiles = drawTilesList (app ^. inProgressStatus) $ app ^. tilesList
     in pure . C.vCenter $ C.hCenter currentTurn <=> C.hCenter (board <+> (actions <=> tiles))
 
 drawApp :: AppState -> [Widget Name]

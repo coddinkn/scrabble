@@ -5,6 +5,9 @@ import Brick.AttrMap (AttrMap, attrMap, attrName, AttrName)
 import Brick.Util (on)
 import qualified Graphics.Vty as V
 
+selectedForPlacingFocusedAttr :: AttrName
+selectedForPlacingFocusedAttr = attrName "selectedForPlacingFocused"
+
 selectedForPlacingAttr :: AttrName
 selectedForPlacingAttr = attrName "selectedForPlacing"
 
@@ -32,5 +35,6 @@ attributeMap = attrMap V.defAttr
     , (tripleLetterAttr, V.defAttr `V.withForeColor` V.blue)
     , (doubleWordAttr, V.defAttr `V.withForeColor` V.rgbColor (234 :: Int) 167 163)
     , (tripleWordAttr, V.defAttr `V.withForeColor` V.red)
-    , (selectedForPlacingAttr, V.black `on` V.yellow)
+    , (selectedForPlacingFocusedAttr, V.black `on` V.yellow)
+    , (selectedForPlacingAttr, V.black `on` V.cyan)
     ]
