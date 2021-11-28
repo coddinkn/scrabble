@@ -8,10 +8,12 @@ import App.Name
 
 import Scrabble.Board
 import Scrabble.Tile (Tile)
+import Scrabble.TilePlacement (tile, position)
 import Scrabble.Modifier
 import qualified Scrabble.GameState as GS
 
-import Data.List (groupBy)
+import Data.List (groupBy, find)
+import Data.Maybe (fromMaybe)
 
 import Brick.Types (Widget)
 import Brick.AttrMap (AttrName)
@@ -34,18 +36,26 @@ boardPositionAttr pos =
                                           then doubleWordAttr
                                           else defaultAttr
 
+positionAttr :: InProgressApp -> Position -> AttrName
+positionAttr app pos =
+    case app ^. inProgressStatus of
+      Place selectedPosition placeStatus ->
+        if selectedPosition == pos
+        then case placeStatus of
+                SelectingPosition -> selectedForPlacingFocusedAttr
+                SelectingTile -> selectedForPlacingAttr
+        else boardPositionAttr pos
+      _ -> boardPositionAttr pos
+
 drawPosition :: InProgressApp -> Position -> Widget Name
-drawPosition app pos = withAttr positionAttr . str $ " " ++ showTile board pos ++ " "
+drawPosition app pos = withAttr (positionAttr app pos) tileWidget
     where board = GS.getBoard $ app ^. gameState
-          positionAttr =
-              case app ^. inProgressStatus of
-                  Place selectedPosition _ placeStatus ->
-                    if selectedPosition == pos
-                    then case placeStatus of
-                            SelectingPosition -> selectedForPlacingFocusedAttr
-                            SelectingTile -> selectedForPlacingAttr
-                    else boardPositionAttr pos
-                  _ -> boardPositionAttr pos
+          noPlacements = str $ " " ++ showTile board pos ++ " "
+          drawPlacement tilePlacement = str $ " " ++ (show $ tile tilePlacement) ++ " "
+          tileWidget =
+              fromMaybe noPlacements . fmap drawPlacement $
+                  find ((== pos) . position) $
+                      app ^. tilePlacements
 
 drawBoard :: InProgressApp -> Widget Name
 drawBoard app =
@@ -109,7 +119,7 @@ drawTile = B.border . str . spaceOut . show
 drawTilesList :: InProgressStatus -> TilesList -> Widget Name
 drawTilesList status = B.borderWithLabel (str "Tiles") . vLimit 21 . hLimit 5 . L.renderList (\_ e -> drawTile e) focused
     where focused = case status of
-                         Place _ _ SelectingTile -> True
+                         Place _ SelectingTile -> True
                          _ -> False
 
 drawInProgressApp :: InProgressApp -> [Widget Name]

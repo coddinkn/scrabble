@@ -6,9 +6,11 @@ import App.AppState
 import App.Name
 
 import Scrabble
+import Scrabble.TilePlacement (TilePlacement (..))
 import qualified Scrabble.GameState as GS
 
 import Data.Maybe (fromJust)
+import Data.List (find, delete)
 import qualified Data.Vector as Vec
 
 import qualified Brick.Types as T
@@ -135,29 +137,54 @@ inProgressEvent app event = do
             _ -> do newActionList <- actionListEvent (app ^. actionList) event
                     M.continue . InProgress $ app & actionList .~ newActionList
 
-        Place (r, c) placements placeStatus -> case event of
+        Place pos placeStatus -> case event of
 
             T.VtyEvent (V.EvKey V.KEsc []) ->
                 case placeStatus of
                     SelectingPosition -> M.continue . InProgress $ app & inProgressStatus .~ Menu
                     SelectingTile ->
-                        let newPlaceStatus = Place (r, c) placements SelectingPosition
+                        let newPlaceStatus = Place pos SelectingPosition
                         in  M.continue . InProgress $ app & inProgressStatus .~ newPlaceStatus
 
-            T.VtyEvent (V.EvKey V.KEnter []) ->
-                M.continue . InProgress $ app & inProgressStatus .~ Place (r, c) placements SelectingTile
+            T.VtyEvent (V.EvKey V.KEnter []) -> M.continue . InProgress $
+                case placeStatus of
+
+                    SelectingPosition ->
+                        let maybePlacedTile = find ((==) pos . position) $ app ^. tilePlacements
+                            (newPlacements, newTilesList, newStatus) =
+                                case maybePlacedTile of
+                                    Just tilePlacement ->
+                                        ( delete tilePlacement $ app ^. tilePlacements
+                                        , L.listInsert 0 (tile tilePlacement) $ app ^. tilesList
+                                        , SelectingPosition
+                                        )
+                                    Nothing -> (app ^. tilePlacements, app ^. tilesList, SelectingTile)
+                        in app & inProgressStatus .~ Place pos newStatus
+                               & tilePlacements .~ newPlacements
+                               & tilesList .~ newTilesList
+
+                    SelectingTile ->
+                        let selectedTile = L.listSelectedElement $ app ^. tilesList
+                            (newPlacements, newTilesList) =
+                                case selectedTile of
+                                    Just (i, t) -> (TilePlacement t pos : app ^. tilePlacements, L.listRemove i $ app ^. tilesList)
+                                    Nothing -> (app ^. tilePlacements, app ^. tilesList)
+                        in  app & inProgressStatus .~ Place pos SelectingPosition
+                                & tilePlacements .~ newPlacements
+                                & tilesList .~ newTilesList
 
             T.VtyEvent (V.EvKey key []) ->
                 case placeStatus of
 
                     SelectingPosition ->
-                        let newPos = case key of
+                        let (r, c) = pos
+                            newPos = case key of
                                          V.KUp -> if r > 0 then (r - 1, c) else (r, c)
                                          V.KLeft ->  if c > 0 then (r, c - 1) else (r, c)
                                          V.KRight -> if c < 14 then (r, c + 1) else (r, c)
                                          V.KDown -> if r < 14 then (r + 1, c) else (r, c)
                                          _ -> (r, c)
-                        in M.continue . InProgress $ app & inProgressStatus .~ Place newPos placements placeStatus
+                        in M.continue . InProgress $ app & inProgressStatus .~ Place newPos placeStatus
 
                     SelectingTile -> do newTilesList <- tilesListEvent (app ^. tilesList) event
                                         M.continue . InProgress $ app & tilesList .~ newTilesList

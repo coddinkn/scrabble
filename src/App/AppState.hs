@@ -13,6 +13,7 @@ module App.AppState
 , ActionList
 , TilesList
 , tilesList
+, tilePlacements
 , inProgressStatus
 , actionList
 , UserList
@@ -73,14 +74,14 @@ data PlaceStatus = SelectingPosition
 data InProgressStatus = Menu
                       | Pass
                       | Exchange
-                      | Place    Position [TilePlacement] PlaceStatus
+                      | Place    Position PlaceStatus
                       deriving (Eq)
 
 instance Show InProgressStatus where
     show Menu = "Menu"
     show Pass = "Pass"
     show Exchange = "Exchange"
-    show (Place _ _ _) = "Place"
+    show (Place _ _) = "Place"
 
 type ActionList = L.List Name InProgressStatus
 
@@ -90,6 +91,7 @@ data InProgressApp =
     InProgressApp { _dictionary       :: [String]
                   , _gameState        :: InProgressState
                   , _inProgressStatus :: InProgressStatus
+                  , _tilePlacements   :: [TilePlacement]
                   , _actionList       :: ActionList
                   , _tilesList        :: TilesList
                   }
@@ -115,8 +117,8 @@ newTilesList inProgressState =
 
 newInProgressApp :: [String] -> InProgressState -> InProgressApp
 newInProgressApp dict inProgressState =
-    let newActionList = L.list Name.ActionList (fromList [Pass, Exchange, Place (7, 7) [] SelectingPosition]) 1
-    in  InProgressApp dict inProgressState Menu newActionList $ newTilesList inProgressState
+    let newActionList = L.list Name.ActionList (fromList [Pass, Exchange, Place (7, 7) SelectingPosition]) 1
+    in  InProgressApp dict inProgressState Menu [] newActionList $ newTilesList inProgressState
 
 newAppState :: StdGen -> AppState
 newAppState =
