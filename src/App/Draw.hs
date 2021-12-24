@@ -6,6 +6,7 @@ import App.AppState
 import App.Attributes
 import App.Name
 
+import Scrabble (getScore)
 import Scrabble.Board
 import Scrabble.Tile (Tile)
 import Scrabble.TilePlacement (tile, position)
@@ -106,10 +107,13 @@ drawWaitingApp app =
         NotEntering -> [ userListWidget ]
 
 drawWhosTurn :: InProgressApp -> Widget Name
-drawWhosTurn app = B.borderWithLabel (str "Current turn") . hLimit 24 . C.hCenter . str . GS.whosTurn $ app ^. gameState
+drawWhosTurn app =
+    let who   = GS.whosTurn $ app ^. gameState
+        score = evalScrabbleApp app $ getScore who
+    in  B.borderWithLabel (str "Current turn") . hLimit 24 . C.hCenter . hBox $ [str who, str " - ", str $ show score]
 
 drawActionList :: InProgressStatus -> ActionList -> Widget Name
-drawActionList status = B.borderWithLabel (str "Actions") . vLimit 3 . hLimit 8 . L.renderList (\_ e -> str $ show e) focused
+drawActionList status = B.borderWithLabel (str "Actions") . vLimit 4 . hLimit 9 . L.renderList (\_ e -> str $ show e) focused
     where focused = status == Menu
 
 drawTile :: Tile -> Widget Name
@@ -128,7 +132,11 @@ drawInProgressApp app =
         currentTurn = drawWhosTurn app
         actions = drawActionList (app ^. inProgressStatus) $ app ^. actionList
         tiles = drawTilesList (app ^. inProgressStatus) $ app ^. tilesList
-    in pure . C.vCenter $ C.hCenter currentTurn <=> C.hCenter (board <+> (actions <=> tiles))
+        placeError message = C.centerLayer . B.borderWithLabel (str "Placement Error") $ str message
+        game = C.vCenter $ C.hCenter currentTurn <=> C.hCenter (board <+> (actions <=> tiles))
+    in  case app ^. inProgressStatus of
+            PlaceError message -> [placeError message, game]
+            _ -> [game]
 
 drawApp :: AppState -> [Widget Name]
 drawApp (Waiting app) = drawWaitingApp app

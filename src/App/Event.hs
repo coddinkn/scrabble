@@ -9,8 +9,11 @@ import Scrabble
 import Scrabble.TilePlacement (TilePlacement (..))
 import qualified Scrabble.GameState as GS
 
+import Control.Monad (void)
+import Control.Monad.IO.Class (liftIO)
 import Data.Maybe (fromJust)
 import Data.List (find, delete)
+import Data.List.NonEmpty (fromList)
 import qualified Data.Vector as Vec
 
 import qualified Brick.Types as T
@@ -72,12 +75,14 @@ waitingEvent app event =
                 T.VtyEvent (V.EvKey V.KEnter []) ->
                     let players = L.listElements $ app ^. userList
                         numberOfPlayers = Vec.length players
-                    in if numberOfPlayers >= 2 && numberOfPlayers <= 4
-                       then either undefined (\(GS.InProgress inProgressState) -> M.continue . InProgress $ newInProgressApp [] inProgressState) $
-                           playScrabble [] (app ^. newGameState) $ do
-                                 mapM_ addPlayer players
-                                 mapM_ ready players
-                       else M.continue . Waiting $ app & waitingStatus .~ CantStart
+                    in  do
+                        dict <- liftIO $ lines <$> readFile "dictionary.txt"
+                        if numberOfPlayers >= 2 && numberOfPlayers <= 4
+                        then either undefined (\(GS.InProgress inProgressState) -> M.continue . InProgress $ newInProgressApp dict inProgressState) $
+                            playScrabble dict (app ^. newGameState) $ do
+                                mapM_ addPlayer players
+                                mapM_ ready players
+                        else M.continue . Waiting $ app & waitingStatus .~ CantStart
 
                 T.VtyEvent _ -> do
                     newUserList <- userListEvent (app ^. userList) event
@@ -103,24 +108,26 @@ tilesListEvent :: TilesList -> T.BrickEvent Name e -> T.EventM Name TilesList
 tilesListEvent list (T.VtyEvent event) = L.handleListEvent event list
 tilesListEvent list _ = return list
 
-playScrabbleApp :: InProgressApp -> Scrabble () -> AppState
-playScrabbleApp app scrabble =
-
-    case playScrabble (app ^. dictionary) (GS.InProgress $ app ^. gameState) scrabble of
-
-        Right (GS.Waiting _) -> undefined -- A transition back to waiting should never occur
-
-        Right (GS.InProgress inProgressGameState) -> InProgress $ app & gameState .~ inProgressGameState
-
-        Right (GS.Over _) -> Over
-
-        Left exception -> error $ show exception
+playTiles :: InProgressApp -> T.EventM Name (T.Next AppState)
+playTiles app =
+    let tps = app ^. tilePlacements
+    in  if length tps > 1
+        then case playScrabble (app ^. dictionary) (GS.InProgress $ app ^. gameState) . void $ placeTiles (fromList tps) of
+                Right (GS.Waiting _) -> undefined
+                Right (GS.InProgress inProgressGameState) -> M.continue . InProgress $ app & gameState .~ inProgressGameState
+                Right (GS.Over _) -> M.halt Over
+                Left exception -> M.continue . InProgress $ app & inProgressStatus .~ PlaceError (show exception)
+        else M.continue . InProgress $ app & inProgressStatus .~ PlaceError "Must place more than one tile!"
 
 inProgressEvent :: InProgressApp -> T.BrickEvent Name e -> T.EventM Name (T.Next AppState)
 
 inProgressEvent app event = do
 
     case app ^. inProgressStatus of
+
+        PlaceError _ -> case event of
+            T.VtyEvent (V.EvKey _ []) -> M.continue . InProgress $ app & inProgressStatus .~ Menu
+            _ -> M.continue $ InProgress app
 
         Menu -> case event of
 
@@ -129,9 +136,13 @@ inProgressEvent app event = do
             T.VtyEvent (V.EvKey V.KEnter []) ->
                 let newStatus = snd . fromJust . L.listSelectedElement $ app ^. actionList
                 in  case newStatus of
+
                         Pass -> case playScrabbleApp app pass of
                             Over -> M.halt Over
                             newApp -> M.continue newApp
+
+                        Play -> playTiles app
+
                         _ -> M.continue . InProgress $ app & inProgressStatus .~ newStatus
 
             _ -> do newActionList <- actionListEvent (app ^. actionList) event
