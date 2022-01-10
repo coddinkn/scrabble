@@ -114,7 +114,11 @@ playTiles app =
     in  if length tps > 1
         then case playScrabble (app ^. dictionary) (GS.InProgress $ app ^. gameState) . void $ placeTiles (fromList tps) of
                 Right (GS.Waiting _) -> undefined
-                Right (GS.InProgress inProgressGameState) -> M.continue . InProgress $ app & gameState .~ inProgressGameState
+                Right (GS.InProgress inProgressGameState) ->
+                    M.continue . InProgress $
+                        app & gameState .~ inProgressGameState
+                            & tilesList .~ newTilesList inProgressGameState
+                            & tilePlacements .~ []
                 Right (GS.Over _) -> M.halt Over
                 Left exception -> M.continue . InProgress $ app & inProgressStatus .~ PlaceError (show exception)
         else M.continue . InProgress $ app & inProgressStatus .~ PlaceError "Must place more than one tile!"
@@ -162,7 +166,7 @@ inProgressEvent app event = do
 
                     SelectingPosition ->
                         let maybePlacedTile = find ((==) pos . position) $ app ^. tilePlacements
-                            (newPlacements, newTilesList, newStatus) =
+                            (newPlacements, nextTilesList, newStatus) =
                                 case maybePlacedTile of
                                     Just tilePlacement ->
                                         ( delete tilePlacement $ app ^. tilePlacements
@@ -172,17 +176,17 @@ inProgressEvent app event = do
                                     Nothing -> (app ^. tilePlacements, app ^. tilesList, SelectingTile)
                         in app & inProgressStatus .~ Place pos newStatus
                                & tilePlacements .~ newPlacements
-                               & tilesList .~ newTilesList
+                               & tilesList .~ nextTilesList
 
                     SelectingTile ->
                         let selectedTile = L.listSelectedElement $ app ^. tilesList
-                            (newPlacements, newTilesList) =
+                            (newPlacements, nextTilesList) =
                                 case selectedTile of
                                     Just (i, t) -> (TilePlacement t pos : app ^. tilePlacements, L.listRemove i $ app ^. tilesList)
                                     Nothing -> (app ^. tilePlacements, app ^. tilesList)
                         in  app & inProgressStatus .~ Place pos SelectingPosition
                                 & tilePlacements .~ newPlacements
-                                & tilesList .~ newTilesList
+                                & tilesList .~ nextTilesList
 
             T.VtyEvent (V.EvKey key []) ->
                 case placeStatus of
@@ -197,8 +201,8 @@ inProgressEvent app event = do
                                          _ -> (r, c)
                         in M.continue . InProgress $ app & inProgressStatus .~ Place newPos placeStatus
 
-                    SelectingTile -> do newTilesList <- tilesListEvent (app ^. tilesList) event
-                                        M.continue . InProgress $ app & tilesList .~ newTilesList
+                    SelectingTile -> do nextTilesList <- tilesListEvent (app ^. tilesList) event
+                                        M.continue . InProgress $ app & tilesList .~ nextTilesList
 
             _ -> M.continue $ InProgress app
 

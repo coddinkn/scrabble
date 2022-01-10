@@ -155,6 +155,8 @@ instance (Monad m) => MonadScrabble (ScrabbleT m) where
         words <- liftEither $ getWords dictionary board tilePlacements
         mapM_ placeTile tilePlacements
         let addScore = (+) $ compute . mconcat $ map score words
+        modifyInProgress $ InProgress . GS.placeTiles username (map tile $ NE.toList tilePlacements)
+        giveTiles $ length tilePlacements
         modifyInProgress $ InProgress . GS.nextTurn
         changeScore username addScore
         where tiles = NE.sort $ fmap tile tilePlacements

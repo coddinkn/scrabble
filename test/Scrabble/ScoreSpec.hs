@@ -1,10 +1,10 @@
-module ScoreSpec where
+module Scrabble.ScoreSpec where
 
 import Test.Hspec
 import Test.QuickCheck
 import Test.QuickCheck.Arbitrary
 
-import Score
+import Scrabble.Score
 
 instance Arbitrary Score where
     arbitrary = Score <$> arbitrary <*> arbitrary

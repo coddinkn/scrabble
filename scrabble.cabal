@@ -71,7 +71,21 @@ test-suite spec
   hs-source-dirs: test
                 , lib
   build-depends: hspec == 2.*
+               , hspec-expectations == 0.8.2
                , QuickCheck == 2.*
   build-tool-depends: hspec-discover:hspec-discover == 2.*
-  other-modules: Score
-               , ScoreSpec
+  other-modules: Scrabble.Score
+               , Scrabble.ScoreSpec
+               , Scrabble
+               , BugSpec
+               , MonadScrabble
+               , Scrabble.Board
+               , Scrabble.Exception
+               , Scrabble.GameState
+               , Scrabble.Modifier
+               , Scrabble.Player
+               , Scrabble.Position
+               , Scrabble.Tile
+               , Scrabble.TilePlacement
+               , Scrabble.Word
+               , ScrabbleT

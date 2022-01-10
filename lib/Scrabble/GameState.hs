@@ -19,6 +19,7 @@ module Scrabble.GameState
 , whosTurn
 , changeUsername
 , giveUserTiles
+, placeTiles
 , getFromPlayer
 , startGame
 , startGameWithTiles -- shenanigan
@@ -200,6 +201,10 @@ getFromPlayer username get state =
 
 modifyPlayer :: Username -> (Player -> Player) -> InProgressState -> InProgressState
 modifyPlayer username modify state = state & players %~ Map.adjust modify username
+
+placeTiles :: Username -> [Tile] -> InProgressState -> InProgressState
+placeTiles username placedTiles state = modifyPlayer username takeTiles state
+    where takeTiles = playerTiles %~ (\\ placedTiles)
 
 changeUsername :: Username -> Username -> GameState -> Either Exception GameState
 changeUsername oldUsername newUsername gameState =

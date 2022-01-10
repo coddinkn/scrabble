@@ -9,6 +9,7 @@ module App.AppState
 , dictionary
 , gameState
 , newGameState
+, newTilesList
 , newInProgressApp
 , ActionList
 , TilesList
